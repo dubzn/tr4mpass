@@ -116,8 +116,8 @@ int session_drm_handshake_online(device_info_t *dev, plist_t session_info,
 
     log_info("[session_online] Got %zu bytes from drmHandshake", resp.len);
 
-    plist_from_memory((const char *)resp.data, (uint32_t)resp.len,
-                      handshake_response, NULL);
+    tr4mpass_plist_from_memory((const char *)resp.data, (uint32_t)resp.len,
+                               handshake_response, NULL);
     free(resp.data);
 
     if (!*handshake_response) {
@@ -184,8 +184,8 @@ int session_device_activation_online(device_info_t *dev,
 
     log_info("[session_online] Got %zu bytes from deviceActivation", resp.len);
 
-    plist_from_memory((const char *)resp.data, (uint32_t)resp.len,
-                      activation_record, NULL);
+    tr4mpass_plist_from_memory((const char *)resp.data, (uint32_t)resp.len,
+                               activation_record, NULL);
     free(resp.data);
 
     if (!*activation_record) {
@@ -292,7 +292,7 @@ int session_probe_albert(device_info_t *dev, plist_t session_info)
         if (cb_data && cb_len > 0) {
             /* CollectionBlob bytes are themselves an XML plist */
             plist_t cb_plist = NULL;
-            plist_from_memory(cb_data, (uint32_t)cb_len, &cb_plist, NULL);
+            tr4mpass_plist_from_memory(cb_data, (uint32_t)cb_len, &cb_plist, NULL);
 
             if (cb_plist) {
                 plist_t ib = plist_dict_get_item(cb_plist, "IngestBody");
@@ -380,8 +380,8 @@ skip_ingest:
            resp.len);
 
     /* Parse and dump top-level keys of the handshake response */
-    plist_from_memory((const char *)resp.data, (uint32_t)resp.len,
-                      &hs_resp, NULL);
+    tr4mpass_plist_from_memory((const char *)resp.data, (uint32_t)resp.len,
+                               &hs_resp, NULL);
     free(resp.data);
 
     if (hs_resp) {

@@ -30,9 +30,6 @@
 /* Maximum USB string descriptor length per USB 2.0 spec */
 #define USB_DESC_MAX_LEN        255
 
-/* Apple recovery mode USB product ID */
-#define APPLE_RECOVERY_PID      0x1281
-
 /*
  * usb_get_string_descriptor -- GET_DESCRIPTOR control transfer for a
  * USB string descriptor. Returns bytes received, or -1 on error.
@@ -185,7 +182,6 @@ int path_b_write_serial_irecovery(device_info_t *dev, const char *new_serial)
 {
     irecv_client_t client = NULL;
     irecv_error_t  err;
-    const struct irecv_device_info *info;
     char           cmd[DFU_SERIAL_MAX + 32];
     int            rc = -1;
 
@@ -208,12 +204,19 @@ int path_b_write_serial_irecovery(device_info_t *dev, const char *new_serial)
     }
 
     /* Verify the device is actually in recovery (not DFU or normal) */
-    info = irecv_get_device_info(client);
-    if (!info || info->pid != APPLE_RECOVERY_PID) {
-        log_error("[path_b_id] Device is not in recovery mode (pid=0x%04X)",
-                  info ? (unsigned)info->pid : 0);
-        irecv_close(client);
-        return -1;
+    {
+        int mode = 0;
+        err = irecv_get_mode(client, &mode);
+        if (err != IRECV_E_SUCCESS ||
+            (mode != IRECV_K_RECOVERY_MODE_1 &&
+             mode != IRECV_K_RECOVERY_MODE_2 &&
+             mode != IRECV_K_RECOVERY_MODE_3 &&
+             mode != IRECV_K_RECOVERY_MODE_4)) {
+            log_error("[path_b_id] Device is not in recovery mode (mode=0x%04X)",
+                      err == IRECV_E_SUCCESS ? (unsigned)mode : 0);
+            irecv_close(client);
+            return -1;
+        }
     }
 
     /* Set the serial-number environment variable */

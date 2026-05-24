@@ -11,6 +11,14 @@
 #include "util/log.h"
 #include "util/usb_helpers.h"
 
+#ifdef TR4MPASS_IRECV_LEGACY
+#define IRECV_INFO_HAS_CPID(info) ((info)->cpid != 0)
+#define IRECV_INFO_HAS_ECID(info) ((info)->ecid != 0)
+#else
+#define IRECV_INFO_HAS_CPID(info) ((info)->have_cpid)
+#define IRECV_INFO_HAS_ECID(info) ((info)->have_ecid)
+#endif
+
 #define DFU_SERIAL_INDEX 3
 #define DFU_STRING_SCAN_MAX 8
 
@@ -187,12 +195,12 @@ static int read_dfu_info_via_irecovery(uint32_t *cpid, uint64_t *ecid,
         irecv_close(client);
         return -1;
     }
-    if (cpid && info->have_cpid) {
+    if (cpid && IRECV_INFO_HAS_CPID(info)) {
         *cpid = info->cpid;
         found = 1;
         log_info("CPID via libirecovery: 0x%04X", *cpid);
     }
-    if (ecid && info->have_ecid) {
+    if (ecid && IRECV_INFO_HAS_ECID(info)) {
         *ecid = info->ecid;
         found = 1;
         log_info("ECID via libirecovery: 0x%016" PRIX64, *ecid);

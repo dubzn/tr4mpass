@@ -107,8 +107,33 @@ install_deps_macos() {
     msg_ok "Homebrew dependencies installed."
 }
 
+ensure_apt_universe() {
+    # libirecovery and libssh2 live in Ubuntu's universe component.
+    if apt-cache show libirecovery-1.0-dev >/dev/null 2>&1; then
+        return 0
+    fi
+
+    msg_warn "Some dependencies are in Ubuntu's 'universe' repository, which is not enabled."
+    if command -v add-apt-repository >/dev/null 2>&1; then
+        msg_info "Enabling universe repository..."
+        sudo add-apt-repository -y universe
+        sudo apt-get update -qq
+    else
+        msg_err "Cannot enable universe automatically (add-apt-repository missing)."
+        msg_info "Run: sudo add-apt-repository universe && sudo apt-get update"
+        exit 1
+    fi
+
+    if ! apt-cache show libirecovery-1.0-dev >/dev/null 2>&1; then
+        msg_err "libirecovery-1.0-dev still unavailable after enabling universe."
+        msg_info "Check /etc/apt/sources.list and ensure 'universe' is listed."
+        exit 1
+    fi
+}
+
 install_deps_linux_apt() {
     local apt_pkgs="libimobiledevice-dev libirecovery-1.0-dev libusb-1.0-0-dev libplist-dev libssl-dev libcurl4-openssl-dev libssh2-1-dev pkg-config build-essential"
+    ensure_apt_universe
     msg_info "Installing dependencies via apt..."
     sudo apt-get update -qq
     sudo apt-get install -y $apt_pkgs

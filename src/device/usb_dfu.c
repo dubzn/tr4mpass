@@ -51,6 +51,7 @@ int usb_dfu_find(libusb_device_handle **handle)
     ssize_t count;
     ssize_t i;
     int found = 0;
+    int ret;
 
     if (!handle)
         return -1;
@@ -70,7 +71,7 @@ int usb_dfu_find(libusb_device_handle **handle)
 
     for (i = 0; i < count; i++) {
         struct libusb_device_descriptor desc;
-        int ret = libusb_get_device_descriptor(devs[i], &desc);
+        ret = libusb_get_device_descriptor(devs[i], &desc);
         if (ret != LIBUSB_SUCCESS)
             continue;
 
@@ -98,13 +99,25 @@ int usb_dfu_find(libusb_device_handle **handle)
     }
 
 #ifndef __APPLE__
-    libusb_detach_kernel_driver(*handle, 0);  /* Linux: detach kernel driver; ignore error */
+    /* Linux: release kernel driver so libusb can talk DFU directly. */
+    if (libusb_kernel_driver_active(*handle, 0) == 1) {
+        ret = libusb_detach_kernel_driver(*handle, 0);
+        if (ret != LIBUSB_SUCCESS) {
+            log_warn("failed to detach kernel driver: %s",
+                     libusb_strerror(ret));
+        }
+    }
 #endif
 
     /* Claim interface 0 (DFU interface) */
-    int ret = libusb_claim_interface(*handle, 0);
-    if (ret != LIBUSB_SUCCESS)
-        log_warn("failed to claim interface 0: %s (continuing anyway)", libusb_strerror(ret));
+    ret = libusb_claim_interface(*handle, 0);
+    if (ret != LIBUSB_SUCCESS) {
+        log_error("failed to claim interface 0: %s", libusb_strerror(ret));
+        log_info("On Linux: run as root, stop usbmuxd, or add udev rules for 05ac:1227");
+        libusb_close(*handle);
+        *handle = NULL;
+        return -1;
+    }
 
     return 0;
 }

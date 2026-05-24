@@ -9,6 +9,20 @@ PKG_LIBS = libimobiledevice-1.0 libirecovery-1.0 libusb-1.0 \
 CFLAGS  += $(foreach lib,$(PKG_LIBS),$(shell pkg-config --cflags $(lib) 2>/dev/null))
 LDFLAGS += $(foreach lib,$(PKG_LIBS),$(shell pkg-config --libs   $(lib) 2>/dev/null))
 
+# Ubuntu 22.04 libplist 2.2.x lacks plist_mem_free and 4-arg plist_from_memory.
+PLIST_VER := $(shell pkg-config --modversion libplist-2.0 2>/dev/null)
+ifeq ($(shell printf '%s\n' "$(PLIST_VER)" | awk -F. '{ if ($$1<2 || ($$1==2 && $$2<3)) print "legacy" }'),legacy)
+CFLAGS += -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h
+else
+CFLAGS += -include include/util/plist_compat.h
+endif
+
+# Ubuntu 22.04 libirecovery 1.0.x lacks have_cpid/have_ecid and send opt enums.
+IRECV_VER := $(shell pkg-config --modversion libirecovery-1.0 2>/dev/null)
+ifeq ($(shell printf '%s\n' "$(IRECV_VER)" | awk -F. '{ if ($$1<1 || ($$1==1 && $$2==0)) print "legacy" }'),legacy)
+CFLAGS += -DTR4MPASS_IRECV_LEGACY
+endif
+
 $(foreach lib,$(PKG_LIBS),$(if $(shell pkg-config --exists $(lib) 2>/dev/null && echo ok),,$(warning Library $(lib) not found by pkg-config)))
 
 # Auto-discover all C sources under src/

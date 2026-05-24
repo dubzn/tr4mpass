@@ -35,6 +35,11 @@
 
 #include <libirecovery.h>
 
+#ifndef IRECV_SEND_OPT_DFU_NOTIFY_FINISH
+/* libirecovery 1.0.x (Ubuntu 22.04): third arg is a plain int flag */
+#define IRECV_SEND_OPT_DFU_NOTIFY_FINISH 1
+#endif
+
 #include "bypass/path_a_internal.h"
 #include "bypass/path_a_ramdisk_internal.h"
 #include "device/device.h"
