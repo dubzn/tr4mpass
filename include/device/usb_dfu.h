@@ -70,4 +70,11 @@ int usb_dfu_recv(libusb_device_handle *handle, void *buf, size_t len,
  */
 void usb_dfu_close(libusb_device_handle *handle);
 
+/*
+ * USB bus reset + poll until the DFU device re-enumerates (gaster does this
+ * between every checkm8 stage).  On success *handle is replaced with a fresh
+ * open handle.  Returns 0 on success, -1 on failure.
+ */
+int usb_dfu_reset_and_reopen(libusb_device_handle **handle);
+
 #endif /* USB_DFU_H */

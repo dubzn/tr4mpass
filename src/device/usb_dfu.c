@@ -1,6 +1,6 @@
 /* usb_dfu.c -- Apple DFU mode device detection and raw USB I/O (libusb) */
 
-#include <stdio.h>
+#include <unistd.h>
 
 #include "device/usb_dfu.h"
 #include "util/usb_helpers.h"
@@ -34,12 +34,14 @@ int usb_dfu_init(void)
     libusb_set_debug(g_ctx, LIBUSB_LOG_LEVEL_WARNING);
 #endif
     log_debug("libusb context initialized");
+    usb_helpers_set_event_ctx(g_ctx);
     return 0;
 }
 
 void usb_dfu_cleanup(void)
 {
     if (g_ctx) {
+        usb_helpers_set_event_ctx(NULL);
         libusb_exit(g_ctx);
         g_ctx = NULL;
     }
@@ -193,4 +195,35 @@ void usb_dfu_close(libusb_device_handle *handle)
     libusb_release_interface(handle, 0);
     libusb_close(handle);
     log_debug("DFU device handle closed");
+}
+
+int usb_dfu_reset_and_reopen(libusb_device_handle **handle)
+{
+    unsigned elapsed_ms = 0;
+    const unsigned poll_ms = 5;
+    const unsigned max_wait_ms = 5000;
+
+    if (!handle)
+        return -1;
+
+    if (*handle) {
+        log_debug("usb_dfu_reset_and_reopen: bus reset...");
+        libusb_reset_device(*handle);
+        usb_dfu_close(*handle);
+        *handle = NULL;
+    }
+
+    log_info("checkm8: waiting for USB re-enumeration...");
+    while (elapsed_ms < max_wait_ms) {
+        if (usb_dfu_find(handle) == 0) {
+            log_info("checkm8: USB handle re-acquired (bus reset OK)");
+            return 0;
+        }
+        usleep(poll_ms * 1000U);
+        elapsed_ms += poll_ms;
+    }
+
+    log_error("usb_dfu_reset_and_reopen: device did not reappear within %u ms",
+              max_wait_ms);
+    return -1;
 }
