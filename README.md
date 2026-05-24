@@ -134,7 +134,7 @@ make
 <summary>Manual dependency install -- macOS</summary>
 
 ```bash
-brew install libimobiledevice libirecovery libusb libplist openssl pkg-config
+brew install libimobiledevice libirecovery libusb libplist openssl curl libssh2 pkg-config
 ```
 
 </details>
@@ -145,7 +145,8 @@ brew install libimobiledevice libirecovery libusb libplist openssl pkg-config
 ```bash
 sudo apt-get install -y \
     libimobiledevice-dev libirecovery-1.0-dev libusb-1.0-0-dev \
-    libplist-dev libssl-dev pkg-config build-essential
+    libplist-dev libssl-dev libcurl4-openssl-dev libssh2-1-dev \
+    pkg-config build-essential
 ```
 
 </details>
@@ -156,7 +157,8 @@ sudo apt-get install -y \
 ```bash
 sudo dnf install -y \
     libimobiledevice-devel libirecovery-devel libusb1-devel \
-    libplist-devel openssl-devel pkg-config gcc make
+    libplist-devel openssl-devel libcurl-devel libssh2-devel \
+    pkg-config gcc make
 ```
 
 </details>
@@ -219,7 +221,7 @@ DFU Mode -> identity manipulation -> signal detection
 
 ### Source Files
 
-The codebase is written in C99 (21 source files, 20 headers). Every file is under 300 lines. The Makefile auto-discovers all sources -- no manual file lists.
+The codebase is written in C99 (33 source files, 29 headers). The Makefile auto-discovers all sources -- no manual file lists.
 
 | Module | What it does |
 |--------|-------------|
@@ -323,5 +325,3 @@ During development, the following proprietary tools were analyzed to understand 
 |------|---------|------------------|
 | Checkm8.info Software | 9.5 | Two-section architecture (A5-A11 vs A12+), DFU exploit flow, FActivation protocol, offline bypass method, bundled go-ios binary, ipwndfu payloads |
 | iRemoveTools | 9.5 | A12+ activation APIs, signal vs no-signal handling, MobileDeviceFramework usage, mobileactivationd interaction |
-
-

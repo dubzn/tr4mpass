@@ -14,7 +14,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <plist/plist.h>
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 #include <libimobiledevice/libimobiledevice.h>
 #include <libirecovery.h>
 

@@ -40,6 +40,7 @@ PKGCONFIG_DEPS=(
     "libusb-1.0"
     "libplist-2.0"
     "openssl"
+    "libcurl"
     "libssh2"
 )
 

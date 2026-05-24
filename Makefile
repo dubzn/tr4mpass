@@ -6,8 +6,8 @@ LDFLAGS  =
 PKG_LIBS = libimobiledevice-1.0 libirecovery-1.0 libusb-1.0 \
            libplist-2.0 openssl libcurl libssh2
 
-CFLAGS  += $(shell pkg-config --cflags $(PKG_LIBS) 2>/dev/null)
-LDFLAGS += $(shell pkg-config --libs   $(PKG_LIBS) 2>/dev/null)
+CFLAGS  += $(foreach lib,$(PKG_LIBS),$(shell pkg-config --cflags $(lib) 2>/dev/null))
+LDFLAGS += $(foreach lib,$(PKG_LIBS),$(shell pkg-config --libs   $(lib) 2>/dev/null))
 
 $(foreach lib,$(PKG_LIBS),$(if $(shell pkg-config --exists $(lib) 2>/dev/null && echo ok),,$(warning Library $(lib) not found by pkg-config)))
 
@@ -78,21 +78,24 @@ MOCK_SRCS    = $(shell find tests/mocks -name '*.c')
 INT_SRCS      = $(shell find tests/integration -name '*.c' 2>/dev/null)
 # Production sources to include in the mock build.  We exclude:
 #   - src/main.c (has its own main())
-#   - src/exploit/* and src/device/usb_dfu.c (direct DFU/checkm8 h/w code)
+#   - src/exploit/* and src/device/usb_dfu*.c (direct DFU/checkm8 h/w code)
 MOCK_SUT_SRCS = $(shell find src -name '*.c' \
                   -not -path 'src/main.c' \
                   -not -path 'src/exploit/*' \
-                  -not -path 'src/device/usb_dfu.c')
+                  -not -path 'src/device/usb_dfu*.c')
 MOCK_ALL_SRCS = $(TEST_SECT) $(MOCK_SRCS) $(INT_SRCS) $(MOCK_SUT_SRCS)
 MOCK_TARGET   = tests/run_mock_tests
 
-# Only link libs that the SUT still needs at runtime and we did NOT mock.
+# Include headers for mocked hardware libraries, but only link libs that
+# the SUT still needs at runtime and we did NOT mock.
+MOCK_HEADER_PKG_LIBS = libimobiledevice-1.0 libirecovery-1.0 libusb-1.0 \
+                       libcurl libssh2
 MOCK_PKG_LIBS = libplist-2.0 openssl
 MOCK_CFLAGS   = -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2 \
-                $(shell pkg-config --cflags $(MOCK_PKG_LIBS) 2>/dev/null) \
+                $(foreach lib,$(MOCK_HEADER_PKG_LIBS) $(MOCK_PKG_LIBS),$(shell pkg-config --cflags $(lib) 2>/dev/null)) \
                 -Iinclude -Itests -Itests/integration -Itests/mocks \
                 -DTEST_MODE -DUNIT_TEST
-MOCK_LDFLAGS  = $(shell pkg-config --libs $(MOCK_PKG_LIBS) 2>/dev/null)
+MOCK_LDFLAGS  = $(foreach lib,$(MOCK_PKG_LIBS),$(shell pkg-config --libs $(lib) 2>/dev/null))
 
 test-mocks: $(MOCK_TARGET)
 	./$(MOCK_TARGET)

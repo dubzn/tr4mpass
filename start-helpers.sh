@@ -101,14 +101,14 @@ install_deps_macos() {
         exit 1
     fi
 
-    local brew_pkgs="libimobiledevice libirecovery libusb libplist openssl pkg-config libssh2"
+    local brew_pkgs="libimobiledevice libirecovery libusb libplist openssl curl pkg-config libssh2"
     msg_info "Installing dependencies via Homebrew..."
     brew install $brew_pkgs
     msg_ok "Homebrew dependencies installed."
 }
 
 install_deps_linux_apt() {
-    local apt_pkgs="libimobiledevice-dev libirecovery-1.0-dev libusb-1.0-0-dev libplist-dev libssl-dev libssh2-1-dev pkg-config build-essential"
+    local apt_pkgs="libimobiledevice-dev libirecovery-1.0-dev libusb-1.0-0-dev libplist-dev libssl-dev libcurl4-openssl-dev libssh2-1-dev pkg-config build-essential"
     msg_info "Installing dependencies via apt..."
     sudo apt-get update -qq
     sudo apt-get install -y $apt_pkgs
@@ -116,7 +116,7 @@ install_deps_linux_apt() {
 }
 
 install_deps_linux_dnf() {
-    local dnf_pkgs="libimobiledevice-devel libirecovery-devel libusb1-devel libplist-devel openssl-devel libssh2-devel pkg-config gcc make"
+    local dnf_pkgs="libimobiledevice-devel libirecovery-devel libusb1-devel libplist-devel openssl-devel libcurl-devel libssh2-devel pkg-config gcc make"
     msg_info "Installing dependencies via dnf..."
     sudo dnf install -y $dnf_pkgs
     msg_ok "DNF dependencies installed."
@@ -156,7 +156,7 @@ install_deps() {
                 dnf) install_deps_linux_dnf ;;
                 pacman)
                     msg_warn "Arch Linux detected. Install from AUR:"
-                    msg_info "  yay -S libimobiledevice libirecovery libusb libplist openssl libssh2 pkg-config base-devel"
+                    msg_info "  yay -S libimobiledevice libirecovery libusb libplist openssl curl libssh2 pkg-config base-devel"
                     msg_info "  or: paru -S libimobiledevice-git libirecovery-git libssh2"
                     msg_info "Re-run this script after installing."
                     exit 1
