@@ -43,31 +43,11 @@ int usb_ctrl_transfer(libusb_device_handle *dev,
                       uint16_t wLength,
                       unsigned int timeout)
 {
-    int ret;
-    int attempt;
-
     if (!dev)
         return LIBUSB_ERROR_INVALID_PARAM;
 
-    for (attempt = 0; attempt < USB_PIPE_MAX_RETRIES; attempt++) {
-        ret = libusb_control_transfer(dev, bmRequestType, bRequest,
-                                      wValue, wIndex, data, wLength, timeout);
-        if (ret >= 0)
-            return ret;
-
-        if (!is_transient_usb_error(ret))
-            return ret;
-
-        /* Transient error -- retry after brief delay */
-        if (attempt < USB_PIPE_MAX_RETRIES - 1) {
-            fprintf(stderr, "[usb] transient error %s on attempt %d/%d, "
-                    "retrying...\n", libusb_strerror(ret),
-                    attempt + 1, USB_PIPE_MAX_RETRIES);
-            usleep(USB_PIPE_RETRY_DELAY);
-        }
-    }
-
-    return ret;
+    return libusb_control_transfer(dev, bmRequestType, bRequest,
+                                   wValue, wIndex, data, wLength, timeout);
 }
 
 int usb_ctrl_transfer_no_data(libusb_device_handle *dev,
@@ -77,30 +57,11 @@ int usb_ctrl_transfer_no_data(libusb_device_handle *dev,
                               uint16_t wIndex,
                               unsigned int timeout)
 {
-    int ret;
-    int attempt;
-
     if (!dev)
         return LIBUSB_ERROR_INVALID_PARAM;
 
-    for (attempt = 0; attempt < USB_PIPE_MAX_RETRIES; attempt++) {
-        ret = libusb_control_transfer(dev, bmRequestType, bRequest,
-                                      wValue, wIndex, NULL, 0, timeout);
-        if (ret >= 0)
-            return 0;
-
-        if (!is_transient_usb_error(ret))
-            return ret;
-
-        if (attempt < USB_PIPE_MAX_RETRIES - 1) {
-            fprintf(stderr, "[usb] transient error %s on attempt %d/%d, "
-                    "retrying...\n", libusb_strerror(ret),
-                    attempt + 1, USB_PIPE_MAX_RETRIES);
-            usleep(USB_PIPE_RETRY_DELAY);
-        }
-    }
-
-    return ret;
+    return libusb_control_transfer(dev, bmRequestType, bRequest,
+                                   wValue, wIndex, NULL, 0, timeout);
 }
 
 void usb_print_error(int libusb_error)
