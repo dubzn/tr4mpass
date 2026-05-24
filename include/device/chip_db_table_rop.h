@@ -47,7 +47,7 @@
     {
         .cpid = 0x8010,
         .name = "A10 (iBoot-2696)",
-        .marketing = "iPhone 7 / iPod touch 7G",
+        .marketing = "iPhone 7 / iPad (7th gen) / iPod touch 7G",
         .checkm8_vulnerable = 1,
         .config_overwrite_pad = 0x5C0,
         .config_hole          = 5,

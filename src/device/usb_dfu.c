@@ -111,6 +111,12 @@ int usb_dfu_find(libusb_device_handle **handle)
     }
 #endif
 
+    /* Gaster sets configuration 1 before DFU I/O. */
+    ret = libusb_set_configuration(*handle, 1);
+    if (ret != LIBUSB_SUCCESS && ret != LIBUSB_ERROR_BUSY) {
+        log_debug("libusb_set_configuration(1): %s", libusb_strerror(ret));
+    }
+
     /* Claim interface 0 (DFU interface) */
     ret = libusb_claim_interface(*handle, 0);
     if (ret != LIBUSB_SUCCESS) {

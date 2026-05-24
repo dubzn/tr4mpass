@@ -138,9 +138,8 @@ int usb_ctrl_transfer_async_abort(libusb_device_handle *dev,
     int completed = 0;
     unsigned char *buf;
     int ret;
-    unsigned waited_ms = 0;
-    const unsigned slice_ms = 2;
-    unsigned budget_ms = abort_timeout_ms + xfer_timeout_ms + 20;
+    unsigned iter = 0;
+    const unsigned max_iter = 64;
 
     if (!dev)
         return LIBUSB_ERROR_INVALID_PARAM;
@@ -170,38 +169,36 @@ int usb_ctrl_transfer_async_abort(libusb_device_handle *dev,
     }
 
     /*
-     * Gaster cancels after abort_timeout_ms.  Reset the slice timer each
-     * iteration: if libusb zeroes the timeval, the next handle_events call
-     * would block forever waiting for a stuck transfer.
+     * Gaster: cancel on every event-loop iteration while waiting up to
+     * abort_timeout_ms.  Reset tv each pass so a zero timeval cannot block
+     * forever on Linux.
      */
-    while (completed == 0 && waited_ms < budget_ms) {
-        unsigned step = slice_ms;
-        if (waited_ms + step > budget_ms)
-            step = budget_ms - waited_ms;
+    while (completed == 0 && iter < max_iter) {
+        unsigned wait_ms = abort_timeout_ms ? abort_timeout_ms : 1;
 
-        tv.tv_sec  = (long)(step / 1000);
-        tv.tv_usec = (long)((step % 1000) * 1000);
+        tv.tv_sec  = (long)(wait_ms / 1000);
+        tv.tv_usec = (long)((wait_ms % 1000) * 1000);
 
-        (void)libusb_handle_events_timeout_completed(g_usb_event_ctx, &tv,
-                                                    &completed);
+        ret = libusb_handle_events_timeout_completed(g_usb_event_ctx, &tv,
+                                                     &completed);
         if (completed != 0)
             break;
 
-        if (waited_ms >= abort_timeout_ms)
-            libusb_cancel_transfer(transfer);
-
-        waited_ms += step;
+        libusb_cancel_transfer(transfer);
+        if (ret != LIBUSB_SUCCESS)
+            break;
+        iter++;
     }
 
     if (completed == 0) {
         libusb_cancel_transfer(transfer);
         tv.tv_sec = 0;
-        tv.tv_usec = 10000;
+        tv.tv_usec = 5000;
         (void)libusb_handle_events_timeout_completed(g_usb_event_ctx, &tv,
                                                     &completed);
         free(buf);
         libusb_free_transfer(transfer);
-        return 0;
+        return LIBUSB_ERROR_TIMEOUT;
     }
 
     switch (transfer->status) {
