@@ -33,7 +33,7 @@ Press Enter to start bypass...
   Activation lock bypass research tool
 ========================================
 
-[INFO] DFU device found (bus 3, addr 42)
+[INFO] DFU device found (bus 3, addr 47)
 [INFO] Device found in DFU mode
 [INFO] CPID: 0x8010
 [INFO] ECID: 0x000E78D61A130026
@@ -76,7 +76,7 @@ Press Enter to start bypass...
 [INFO] checkm8: stage 1/4 -- reset DFU state
 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 42)
+[INFO] DFU device found (bus 3, addr 47)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
@@ -88,7 +88,7 @@ Press Enter to start bypass...
 [ERROR] checkm8_stage_setup: exceeded 50 retries, giving up
 [WARN] checkm8_exploit: attempt 1 failed, retrying...
 [INFO] checkm8_exploit: waiting for device reset...
-[INFO] DFU device found (bus 3, addr 42)
+[INFO] DFU device found (bus 3, addr 47)
 [INFO] checkm8_exploit: USB handle re-acquired for retry 2
 [INFO] checkm8_exploit: attempt 2/3
 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
@@ -96,7 +96,7 @@ Press Enter to start bypass...
 [INFO] checkm8: stage 1/4 -- reset DFU state
 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 42)
+[INFO] DFU device found (bus 3, addr 47)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
@@ -108,16 +108,150 @@ Press Enter to start bypass...
 [ERROR] checkm8_stage_setup: exceeded 50 retries, giving up
 [WARN] checkm8_exploit: attempt 2 failed, retrying...
 [INFO] checkm8_exploit: waiting for device reset...
-[INFO] DFU device found (bus 3, addr 42)
-libusb: error [op_set_configuration] set configuration failed, errno=110
+[INFO] DFU device found (bus 3, addr 47)
 [INFO] checkm8_exploit: USB handle re-acquired for retry 3
 [INFO] checkm8_exploit: attempt 3/3
+[INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
+[INFO] exploit_deliver: starting checkm8 on A10 (iBoot-2696)
+[INFO] checkm8: stage 1/4 -- reset DFU state
+[INFO] checkm8: stage 1 complete -- DFU reset stage OK
+[INFO] checkm8: waiting for USB re-enumeration...
+[INFO] DFU device found (bus 3, addr 47)
+[INFO] checkm8: USB handle re-acquired (bus reset OK)
+[INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
+[INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
+[INFO] checkm8: setup attempt 10/50: sent=2048 bytes (need <1472, abort=7 ms)
+[INFO] checkm8: setup attempt 20/50: sent=2048 bytes (need <1472, abort=17 ms)
+[INFO] checkm8: setup attempt 30/50: sent=2048 bytes (need <1472, abort=27 ms)
+[INFO] checkm8: setup attempt 40/50: sent=2048 bytes (need <1472, abort=37 ms)
+[INFO] checkm8: setup attempt 50/50: sent=2048 bytes (need <1472, abort=47 ms)
+[ERROR] checkm8_stage_setup: exceeded 50 retries, giving up
+[WARN] checkm8_exploit: attempt 3 failed, retrying...
+[ERROR] checkm8_exploit: failed after 3 attempts
+[ERROR] path_a: checkm8 exploit failed
+
+[-] Bypass failed (error -1).
+ibim@ibim-ThinkPad-E14-Gen-2:~/tr4mpass$ sudo ./start.sh
+[sudo] password for ibim: 
+========================================
+  tr4mpass v0.2.0
+  Activation lock bypass research tool
+========================================
+
+[+] Detected OS: Linux (Ubuntu 22.04.5 LTS)
+[+] All dependencies are already installed.
+[+] Binary already built: /home/ibim/tr4mpass/tr4mpass
+
+----------------------------------------
+[*] Connect your iOS device via USB cable.
+
+[*] Waiting for device... 18s / 60s[+] Device detected in DFU mode!
+[*] Device in DFU mode. Querying chip info...
+
+========================================
+  Device Information
+========================================
+  Mode:        DFU
+  Chip:        A10 (iBoot-2696) (CPID: 0x8010)
+  Bypass:      Path A (checkm8, A5-A11)
+  Status:      SUPPORTED
+========================================
+
+[+] Device is supported. Ready to proceed.
+Press Enter to start bypass...
+
+[*] Starting tr4mpass...
+
+========================================
+  tr4mpass v0.2.0
+  Activation lock bypass research tool
+========================================
+
+[INFO] DFU device found (bus 3, addr 49)
+[INFO] Device found in DFU mode
+[INFO] CPID: 0x8010
+[INFO] ECID: 0x000E78D61A130026
+
+--- Device Information ---
+  UDID:             
+  Product Type:     
+  Chip ID:          
+  iOS Version:      
+  Activation State: 
+  Serial:           CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:000E78D61A130026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]
+  IMEI:             (none / WiFi-only)
+  MEID:             (none)
+  Hardware Model:   
+  Device Name:      
+  CPID:             0x8010
+  ECID:             0xE78D61A130026
+  Chip Name:        A10 (iBoot-2696)
+  checkm8 vuln:     YES
+  Cellular:         NO (WiFi-only)
+  DFU Mode:         YES
+-------------------------
+
+[INFO] [bypass] Registered module: path_a_checkm8
+[INFO] [bypass] Registered module: path_b_a12plus
+[INFO] [bypass] 2 registered module(s):
+[INFO]   [0] path_a_checkm8 -- A5-A11 bypass via checkm8 BootROM exploit + jailbreak + activation
+[INFO]   [1] path_b_a12plus -- A12+ bypass via identity manipulation + session activation
+[INFO] path_a: device is eligible (checkm8-vulnerable, DFU mode)
+[INFO] [bypass] Selected module: path_a_checkm8
+[INFO] Auto-selected module: path_a_checkm8
+[INFO] Executing module: path_a_checkm8
+[INFO] [bypass] Executing module: path_a_checkm8
+[INFO] path_a: === Starting A5-A11 bypass for  ===
+[INFO] path_a: [1/8] Delivering checkm8 exploit
+[INFO] checkm8_exploit: starting exploit on CPID 0x8010
+[INFO] checkm8_exploit: attempt 1/3
+[INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
+[INFO] exploit_deliver: starting checkm8 on A10 (iBoot-2696)
+[INFO] checkm8: stage 1/4 -- reset DFU state
+[INFO] checkm8: stage 1 complete -- DFU reset stage OK
+[INFO] checkm8: waiting for USB re-enumeration...
+[INFO] DFU device found (bus 3, addr 49)
+[INFO] checkm8: USB handle re-acquired (bus reset OK)
+[INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
+[INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
+[INFO] checkm8: setup attempt 10/50: sent=2048 bytes (need <1472, abort=7 ms)
+[INFO] checkm8: setup attempt 20/50: sent=2048 bytes (need <1472, abort=17 ms)
+[INFO] checkm8: setup attempt 30/50: sent=2048 bytes (need <1472, abort=27 ms)
+[INFO] checkm8: setup attempt 40/50: sent=2048 bytes (need <1472, abort=37 ms)
+[INFO] checkm8: setup attempt 50/50: sent=2048 bytes (need <1472, abort=47 ms)
+[ERROR] checkm8_stage_setup: exceeded 50 retries, giving up
+[WARN] checkm8_exploit: attempt 1 failed, retrying...
+[INFO] checkm8_exploit: waiting for device reset...
+[INFO] DFU device found (bus 3, addr 49)
+libusb: error [op_set_configuration] set configuration failed, errno=110
+[INFO] checkm8_exploit: USB handle re-acquired for retry 2
+[INFO] checkm8_exploit: attempt 2/3
 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
 [INFO] exploit_deliver: starting checkm8 on A10 (iBoot-2696)
 [INFO] checkm8: stage 1/4 -- reset DFU state
 [ERROR] dfu_dnload: block 0 failed: Operation timed out
 [ERROR] checkm8_stage_reset: DFU_DNLOAD(suffix) failed
 [ERROR] dfu_clr_status: control transfer failed: Input/Output Error
+[WARN] checkm8_exploit: attempt 2 failed, retrying...
+[INFO] checkm8_exploit: waiting for device reset...
+[INFO] DFU device found (bus 3, addr 50)
+[INFO] checkm8_exploit: USB handle re-acquired for retry 3
+[INFO] checkm8_exploit: attempt 3/3
+[INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
+[INFO] exploit_deliver: starting checkm8 on A10 (iBoot-2696)
+[INFO] checkm8: stage 1/4 -- reset DFU state
+[INFO] checkm8: stage 1 complete -- DFU reset stage OK
+[INFO] checkm8: waiting for USB re-enumeration...
+[INFO] DFU device found (bus 3, addr 50)
+[INFO] checkm8: USB handle re-acquired (bus reset OK)
+[INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
+[INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
+[INFO] checkm8: setup attempt 10/50: sent=2048 bytes (need <1472, abort=7 ms)
+[INFO] checkm8: setup attempt 20/50: sent=2048 bytes (need <1472, abort=17 ms)
+[INFO] checkm8: setup attempt 30/50: sent=2048 bytes (need <1472, abort=27 ms)
+[INFO] checkm8: setup attempt 40/50: sent=2048 bytes (need <1472, abort=37 ms)
+[INFO] checkm8: setup attempt 50/50: sent=2048 bytes (need <1472, abort=47 ms)
+[ERROR] checkm8_stage_setup: exceeded 50 retries, giving up
 [WARN] checkm8_exploit: attempt 3 failed, retrying...
 [ERROR] checkm8_exploit: failed after 3 attempts
 [ERROR] path_a: checkm8 exploit failed
