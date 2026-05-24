@@ -1,6 +1,4 @@
-me ayudas a seguir con este? te estabas basando en el metodo gaster pero sigue fallando, quizas no es la solucion, como podemos obtener mas logs?
-
-root@ibim-ThinkPad-E14-Gen-2:/home/ibim/tr4mpass# ./start.sh
+ibim@ibim-ThinkPad-E14-Gen-2:~/tr4mpass$ sudo ./start.sh
 ========================================
   tr4mpass v0.2.0
   Activation lock bypass research tool
@@ -13,7 +11,7 @@ root@ibim-ThinkPad-E14-Gen-2:/home/ibim/tr4mpass# ./start.sh
 ----------------------------------------
 [*] Connect your iOS device via USB cable.
 
-[*] Waiting for device... 26s / 60s[+] Device detected in DFU mode!
+[*] Waiting for device... 16s / 60s[+] Device detected in DFU mode!
 [*] Device in DFU mode. Querying chip info...
 
 ========================================
@@ -35,7 +33,7 @@ Press Enter to start bypass...
   Activation lock bypass research tool
 ========================================
 
-[INFO] DFU device found (bus 3, addr 40)
+[INFO] DFU device found (bus 3, addr 42)
 [INFO] Device found in DFU mode
 [INFO] CPID: 0x8010
 [INFO] ECID: 0x000E78D61A130026
@@ -78,7 +76,7 @@ Press Enter to start bypass...
 [INFO] checkm8: stage 1/4 -- reset DFU state
 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 40)
+[INFO] DFU device found (bus 3, addr 42)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
@@ -90,7 +88,7 @@ Press Enter to start bypass...
 [ERROR] checkm8_stage_setup: exceeded 50 retries, giving up
 [WARN] checkm8_exploit: attempt 1 failed, retrying...
 [INFO] checkm8_exploit: waiting for device reset...
-[INFO] DFU device found (bus 3, addr 40)
+[INFO] DFU device found (bus 3, addr 42)
 [INFO] checkm8_exploit: USB handle re-acquired for retry 2
 [INFO] checkm8_exploit: attempt 2/3
 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
@@ -98,7 +96,7 @@ Press Enter to start bypass...
 [INFO] checkm8: stage 1/4 -- reset DFU state
 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 40)
+[INFO] DFU device found (bus 3, addr 42)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
@@ -110,24 +108,16 @@ Press Enter to start bypass...
 [ERROR] checkm8_stage_setup: exceeded 50 retries, giving up
 [WARN] checkm8_exploit: attempt 2 failed, retrying...
 [INFO] checkm8_exploit: waiting for device reset...
-[INFO] DFU device found (bus 3, addr 40)
+[INFO] DFU device found (bus 3, addr 42)
+libusb: error [op_set_configuration] set configuration failed, errno=110
 [INFO] checkm8_exploit: USB handle re-acquired for retry 3
 [INFO] checkm8_exploit: attempt 3/3
 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
 [INFO] exploit_deliver: starting checkm8 on A10 (iBoot-2696)
 [INFO] checkm8: stage 1/4 -- reset DFU state
-[INFO] checkm8: stage 1 complete -- DFU reset stage OK
-[INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 40)
-[INFO] checkm8: USB handle re-acquired (bus reset OK)
-[INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
-[INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
-[INFO] checkm8: setup attempt 10/50: sent=2048 bytes (need <1472, abort=7 ms)
-[INFO] checkm8: setup attempt 20/50: sent=2048 bytes (need <1472, abort=17 ms)
-[INFO] checkm8: setup attempt 30/50: sent=2048 bytes (need <1472, abort=27 ms)
-[INFO] checkm8: setup attempt 40/50: sent=2048 bytes (need <1472, abort=37 ms)
-[INFO] checkm8: setup attempt 50/50: sent=2048 bytes (need <1472, abort=47 ms)
-[ERROR] checkm8_stage_setup: exceeded 50 retries, giving up
+[ERROR] dfu_dnload: block 0 failed: Operation timed out
+[ERROR] checkm8_stage_reset: DFU_DNLOAD(suffix) failed
+[ERROR] dfu_clr_status: control transfer failed: Input/Output Error
 [WARN] checkm8_exploit: attempt 3 failed, retrying...
 [ERROR] checkm8_exploit: failed after 3 attempts
 [ERROR] path_a: checkm8 exploit failed
