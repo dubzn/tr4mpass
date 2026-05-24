@@ -45,6 +45,7 @@ PKGCONFIG_DEPS=(
 )
 
 START_VERBOSE=0
+START_DIAGNOSTIC=0
 
 # ------------------------------------------------------------------ #
 # Source helper functions.                                            #
@@ -66,6 +67,7 @@ main() {
     for arg in "$@"; do
         case "$arg" in
             -v|--verbose) START_VERBOSE=1 ;;
+            --diagnostic|--usb-diagnostic) START_DIAGNOSTIC=1 ;;
         esac
     done
 
@@ -73,6 +75,11 @@ main() {
     detect_os
     install_deps
     build_project
+
+    if [ "$START_DIAGNOSTIC" -eq 1 ]; then
+        msg_info "Running safe USB/DFU diagnostic only..."
+        exec "$BINARY" "$@"
+    fi
 
     echo ""
     echo "----------------------------------------"

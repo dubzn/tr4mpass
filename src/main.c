@@ -9,6 +9,7 @@
 #include "tr4mpass.h"
 #include "device/device.h"
 #include "device/usb_dfu.h"
+#include "device/usb_dfu_diagnostic.h"
 #include "device/chip_db.h"
 #include "bypass/bypass.h"
 #include "bypass/path_a.h"
@@ -23,6 +24,7 @@ typedef struct {
     int verbose;
     int dry_run;
     int detect_only;
+    int usb_diagnostic;
     int activate_only;
     int probe_albert;
     int force_path_a;
@@ -48,6 +50,8 @@ static void print_usage(const char *prog)
            "  -v, --verbose          Enable debug logging + env summary\n"
            "  -n, --dry-run          Show what would run, do not execute\n"
            "  -d, --detect-only      Detect device and exit\n"
+           "      --diagnostic       Safe USB/DFU diagnostic only\n"
+           "      --usb-diagnostic   Alias for --diagnostic\n"
            "      --activate-only    Online activation via Albert (normal mode)\n"
            "      --probe-albert     Dump IngestBody fields + drmHandshake only\n"
            "  -a, --force-path-a     Force Path A (checkm8, A5-A11)\n"
@@ -66,12 +70,15 @@ static int parse_args(int argc, char *argv[], cli_opts_t *opts)
         OPT_ECID          = 257,
         OPT_ACTIVATE_ONLY = 258,
         OPT_PROBE_ALBERT  = 259,
+        OPT_DIAGNOSTIC    = 260,
     };
 
     static const struct option longopts[] = {
         { "verbose",        no_argument,       NULL, 'v' },
         { "dry-run",        no_argument,       NULL, 'n' },
         { "detect-only",    no_argument,       NULL, 'd' },
+        { "diagnostic",     no_argument,       NULL, OPT_DIAGNOSTIC },
+        { "usb-diagnostic", no_argument,       NULL, OPT_DIAGNOSTIC },
         { "activate-only",  no_argument,       NULL, OPT_ACTIVATE_ONLY },
         { "probe-albert",   no_argument,       NULL, OPT_PROBE_ALBERT  },
         { "force-path-a",   no_argument,       NULL, 'a' },
@@ -98,6 +105,8 @@ static int parse_args(int argc, char *argv[], cli_opts_t *opts)
         case 'v': opts->verbose        = 1; break;
         case 'n': opts->dry_run        = 1; break;
         case 'd': opts->detect_only    = 1; break;
+        case OPT_DIAGNOSTIC:
+                  opts->usb_diagnostic = 1; break;
         case OPT_ACTIVATE_ONLY:
                   opts->activate_only  = 1; break;
         case OPT_PROBE_ALBERT:
@@ -283,8 +292,11 @@ int main(int argc, char *argv[])
     enrich_chip_info(&dev);
     device_print_info(&dev);
 
-    if (opts.detect_only) {
-        log_info("Detect-only mode, exiting");
+    if (opts.detect_only || opts.usb_diagnostic) {
+        if (opts.usb_diagnostic)
+            (void)usb_dfu_print_diagnostic(&dev);
+        log_info("%s mode, exiting",
+                 opts.usb_diagnostic ? "Diagnostic" : "Detect-only");
         cleanup(&dev);
         return 0;
     }
