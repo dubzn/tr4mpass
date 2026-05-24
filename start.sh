@@ -44,6 +44,8 @@ PKGCONFIG_DEPS=(
     "libssh2"
 )
 
+START_VERBOSE=0
+
 # ------------------------------------------------------------------ #
 # Source helper functions.                                            #
 # ------------------------------------------------------------------ #
@@ -60,6 +62,13 @@ fi
 # ------------------------------------------------------------------ #
 
 main() {
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            -v|--verbose) START_VERBOSE=1 ;;
+        esac
+    done
+
     print_banner
     detect_os
     install_deps

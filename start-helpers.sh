@@ -310,7 +310,12 @@ wait_for_device() {
 
 parse_device_info() {
     local output
-    output="$("$BINARY" --detect-only 2>&1)" || true
+    local detect_args
+    detect_args=(--detect-only)
+    if [ "${START_VERBOSE:-0}" = "1" ]; then
+        detect_args+=(--verbose)
+    fi
+    output="$("$BINARY" "${detect_args[@]}" 2>&1)" || true
 
     if [ -z "$output" ]; then
         msg_err "Device query returned no output (binary may have crashed or device disconnected)."
@@ -323,14 +328,14 @@ parse_device_info() {
         return 0
     fi
 
-    DEV_MODEL="$(echo "$output" | grep "Product Type:" | sed 's/.*Product Type:[[:space:]]*//')"
-    DEV_CHIP_NAME="$(echo "$output" | grep "Chip Name:" | sed 's/.*Chip Name:[[:space:]]*//')"
-    DEV_CPID="$(echo "$output" | grep "CPID:" | sed 's/.*CPID:[[:space:]]*//')"
-    DEV_IOS="$(echo "$output" | grep "iOS Version:" | sed 's/.*iOS Version:[[:space:]]*//')"
-    DEV_SERIAL="$(echo "$output" | grep "Serial:" | sed 's/.*Serial:[[:space:]]*//')"
-    DEV_IMEI="$(echo "$output" | grep "IMEI:" | sed 's/.*IMEI:[[:space:]]*//')"
-    DEV_CHECKM8="$(echo "$output" | grep "checkm8 vuln:" | sed 's/.*checkm8 vuln:[[:space:]]*//')"
-    DEV_DFU="$(echo "$output" | grep "DFU Mode:" | sed 's/.*DFU Mode:[[:space:]]*//')"
+    DEV_MODEL="$(printf '%s\n' "$output" | sed -n 's/^[[:space:]]*Product Type:[[:space:]]*//p' | head -n1)"
+    DEV_CHIP_NAME="$(printf '%s\n' "$output" | sed -n 's/^[[:space:]]*Chip Name:[[:space:]]*//p' | head -n1)"
+    DEV_CPID="$(printf '%s\n' "$output" | sed -n 's/^[[:space:]]*CPID:[[:space:]]*//p' | head -n1)"
+    DEV_IOS="$(printf '%s\n' "$output" | sed -n 's/^[[:space:]]*iOS Version:[[:space:]]*//p' | head -n1)"
+    DEV_SERIAL="$(printf '%s\n' "$output" | sed -n 's/^[[:space:]]*Serial:[[:space:]]*//p' | head -n1)"
+    DEV_IMEI="$(printf '%s\n' "$output" | sed -n 's/^[[:space:]]*IMEI:[[:space:]]*//p' | head -n1)"
+    DEV_CHECKM8="$(printf '%s\n' "$output" | sed -n 's/^[[:space:]]*checkm8 vuln:[[:space:]]*//p' | head -n1)"
+    DEV_DFU="$(printf '%s\n' "$output" | sed -n 's/^[[:space:]]*DFU Mode:[[:space:]]*//p' | head -n1)"
 
     if [ "$DEV_CHECKM8" = "YES" ]; then
         DEV_BYPASS="Path A (checkm8, A5-A11)"
