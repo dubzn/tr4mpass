@@ -100,7 +100,7 @@ int usb_ctrl_transfer_async_abort(libusb_device_handle *dev,
     unsigned char *buf;
     int ret;
     unsigned iter = 0;
-    const unsigned max_iter = 64;
+    const unsigned max_iter = 100;
 
     if (!dev)
         return LIBUSB_ERROR_INVALID_PARAM;
@@ -129,23 +129,22 @@ int usb_ctrl_transfer_async_abort(libusb_device_handle *dev,
         return LIBUSB_ERROR_IO;
     }
 
-    /*
-     * Gaster: cancel on every event-loop iteration while waiting up to
-     * abort_timeout_ms.  Reset tv each pass so a zero timeval cannot block
-     * forever on Linux.
-     */
+    /* Wait for the abort timeout */
+    tv.tv_sec  = (long)(abort_timeout_ms / 1000);
+    tv.tv_usec = (long)((abort_timeout_ms % 1000) * 1000);
+    libusb_handle_events_timeout_completed(g_usb_event_ctx, &tv, &completed);
+
+    /* If not completed, cancel it */
+    if (completed == 0) {
+        libusb_cancel_transfer(transfer);
+    }
+
+    /* Wait for the transfer to finish (either success or cancelled) */
     while (completed == 0 && iter < max_iter) {
-        unsigned wait_ms = abort_timeout_ms ? abort_timeout_ms : 1;
-
-        tv.tv_sec  = (long)(wait_ms / 1000);
-        tv.tv_usec = (long)((wait_ms % 1000) * 1000);
-
+        tv.tv_sec = 0;
+        tv.tv_usec = 2000; /* 2 ms */
         ret = libusb_handle_events_timeout_completed(g_usb_event_ctx, &tv,
                                                      &completed);
-        if (completed != 0)
-            break;
-
-        libusb_cancel_transfer(transfer);
         if (ret != LIBUSB_SUCCESS)
             break;
         iter++;
