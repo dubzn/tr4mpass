@@ -29,7 +29,7 @@
 [INFO] [bypass] Executing module: path_a_checkm8
 [INFO] path_a: === Starting A5-A11 bypass for  ===
 [INFO] path_a: [1/8] Delivering checkm8 exploit
-[INFO] checkm8_exploit: version 1.0.4
+[INFO] checkm8_exploit: version 1.0.5
 [INFO] checkm8_exploit: starting exploit on CPID 0x8010
 [INFO] checkm8_exploit: attempt 1/2
 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
@@ -37,24 +37,21 @@
 [INFO] checkm8: stage 1/4 -- reset DFU state
 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 10)
+[INFO] DFU device found (bus 3, addr 20)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
 [INFO] checkm8: [Linux xHCI] Cancelled! Guessing sent=128 (to prevent crash)
 [INFO] checkm8: stage 2 complete -- UAF triggered (sent=128, pad=1344)
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 10)
+[INFO] DFU device found (bus 3, addr 20)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 3/4 -- heap spray
 [INFO] checkm8: stage 3 complete -- heap spray done
 [INFO] checkm8: waiting for USB re-enumeration...
-libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/010, errno=19
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/020, errno=19
 [ERROR] failed to open DFU device: Input/Output Error
-libusb: error [get_usbfs_fd] File doesn't exist, wait 10 ms and try again
-libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/010, errno=2
-[ERROR] failed to open DFU device: No such device (it may have been disconnected)
-[INFO] DFU device found (bus 3, addr 11)
+[INFO] DFU device found (bus 3, addr 21)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 4/4 -- overwrite with payload
 [INFO] assemble_payload: notA9 variant: 2016 bytes (rop_prefix=1552 main=120 cfg=96 handle=192+56) CPID 0x8010
@@ -81,7 +78,7 @@ libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/01
 [INFO] checkm8: stage 4 complete -- payload delivered
 [INFO] exploit_deliver: all stages complete
 [INFO] checkm8_exploit: stage 4 done -- waiting for natural re-enumeration...
-[INFO] DFU device found (bus 3, addr 11)
+[INFO] DFU device found (bus 3, addr 21)
 libusb: error [op_set_configuration] set configuration failed, errno=110
 [INFO] checkm8_exploit: device re-enumerated after Stage 4 (poll 1)
 [WARN] string descriptor 4 read: Operation timed out (attempt 1/3, retrying)
@@ -102,12 +99,12 @@ libusb: error [op_set_configuration] set configuration failed, errno=110
 [WARN] string descriptor 8 read: Operation timed out (attempt 2/3, retrying)
 [ERROR] failed to read serial descriptor: Operation timed out
 [usb] error -7: Operation timed out
-[INFO] checkm8_verify_pwned: serial = "����" (len=6)
-[INFO] checkm8_verify_pwned: serial hex = [A0 AB C5 10 FC 7F ]
+[INFO] checkm8_verify_pwned: serial = " z�o�" (len=6)
+[INFO] checkm8_verify_pwned: serial hex = [20 7A F1 6F FF 7F ]
 [WARN] checkm8_verify_pwned: PWND marker not found in serial
 [WARN] checkm8_exploit: not pwned after attempt 1
 [INFO] checkm8_exploit: waiting for device reset...
-[INFO] DFU device found (bus 3, addr 11)
+[INFO] DFU device found (bus 3, addr 21)
 libusb: error [op_set_configuration] set configuration failed, errno=110
 [INFO] checkm8_exploit: USB handle re-acquired for retry 2
 [WARN] string descriptor 4 read: Operation timed out (attempt 1/3, retrying)
@@ -128,8 +125,8 @@ libusb: error [op_set_configuration] set configuration failed, errno=110
 [WARN] string descriptor 8 read: Operation timed out (attempt 2/3, retrying)
 [ERROR] failed to read serial descriptor: Operation timed out
 [usb] error -7: Operation timed out
-[INFO] checkm8_verify_pwned: serial = "����" (len=6)
-[INFO] checkm8_verify_pwned: serial hex = [A0 AB C5 10 FC 7F ]
+[INFO] checkm8_verify_pwned: serial = " z�o�" (len=6)
+[INFO] checkm8_verify_pwned: serial hex = [20 7A F1 6F FF 7F ]
 [WARN] checkm8_verify_pwned: PWND marker not found in serial
 [INFO] checkm8_exploit: not yet PWND, running attempt 2
 [INFO] checkm8_exploit: attempt 2/2
