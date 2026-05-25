@@ -207,19 +207,17 @@ install_deps() {
 # ------------------------------------------------------------------ #
 
 build_project() {
-    if [ -f "$BINARY" ] && [ -x "$BINARY" ]; then
-        msg_ok "Binary already built: $BINARY"
-        return 0
-    fi
-
     if [ -d "$BINARY" ]; then
         msg_err "Expected binary at $BINARY but found a directory."
         msg_info "Remove it and rebuild: rm -rf '$BINARY' && make clean && make"
         exit 1
     fi
 
-    msg_info "Building tr4mpass..."
-    if ! (cd "$SCRIPT_DIR" && make clean && make); then
+    # Always run make so it can detect changed sources via dependency tracking.
+    # If nothing changed, make exits immediately. If sources are newer than the
+    # binary, it recompiles only what is necessary.
+    msg_info "Checking / building tr4mpass..."
+    if ! (cd "$SCRIPT_DIR" && make); then
         msg_err "Build failed. Check compiler output above."
         msg_info "If the linker reports 'library not found for -lssh2', install libssh2"
         msg_info "  macOS:  brew install libssh2"
@@ -239,7 +237,7 @@ build_project() {
         exit 1
     fi
 
-    msg_ok "Build successful."
+    msg_ok "Binary ready: $BINARY"
 }
 
 # ------------------------------------------------------------------ #
