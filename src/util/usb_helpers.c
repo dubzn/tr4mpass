@@ -97,6 +97,7 @@ int usb_ctrl_transfer_async_abort(libusb_device_handle *dev,
     struct libusb_transfer *transfer;
     struct timeval tv;
     int completed = 0;
+    int cancelled = 0;
     unsigned char *buf;
     int ret;
     unsigned iter = 0;
@@ -137,6 +138,7 @@ int usb_ctrl_transfer_async_abort(libusb_device_handle *dev,
     /* If not completed, cancel it */
     if (completed == 0) {
         libusb_cancel_transfer(transfer);
+        cancelled = 1;
     }
 
     /* Wait for the transfer to finish (either success or cancelled) */
@@ -168,7 +170,15 @@ int usb_ctrl_transfer_async_abort(libusb_device_handle *dev,
     case LIBUSB_TRANSFER_COMPLETED:
     case LIBUSB_TRANSFER_CANCELLED:
     case LIBUSB_TRANSFER_TIMED_OUT:
+#if defined(__linux__) && !defined(__APPLE__)
+        if (cancelled) {
+            ret = 0; /* Workaround for xHCI usbfs reporting wLength when cancelled */
+        } else {
+            ret = (int)transfer->actual_length;
+        }
+#else
         ret = (int)transfer->actual_length;
+#endif
         break;
     default:
         ret = LIBUSB_ERROR_IO;
