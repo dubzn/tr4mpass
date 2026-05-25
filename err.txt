@@ -1,0 +1,47 @@
+ibim@ibim-ThinkPad-E14-Gen-2:~/tr4mpass$ sudo ./start.sh
+========================================
+  tr4mpass v0.2.0
+  Activation lock bypass research tool
+========================================
+
+[+] Detected OS: Linux (Ubuntu 22.04.5 LTS)
+[+] All dependencies are already installed.
+[*] Building tr4mpass...
+find src -name '*.o' -delete
+rm -f tr4mpass tests/run_tests tests/run_mock_tests
+find tests -name '*.o' -delete 2>/dev/null || true
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/util/plist_helpers.o src/util/plist_helpers.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/util/log.o src/util/log.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/util/env_config.o src/util/env_config.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/util/usb_helpers.o src/util/usb_helpers.c
+src/util/usb_helpers.c:32:12: warning: ‘is_transient_usb_error’ defined but not used [-Wunused-function]
+   32 | static int is_transient_usb_error(int err)
+      |            ^~~~~~~~~~~~~~~~~~~~~~
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/device/usb_dfu_info.o src/device/usb_dfu_info.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/device/chip_db.o src/device/chip_db.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/device/usb_dfu_diagnostic.o src/device/usb_dfu_diagnostic.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/device/usb_dfu.o src/device/usb_dfu.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/device/device.o src/device/device.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/exploit/dfu_proto.o src/exploit/dfu_proto.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/exploit/checkm8_spray.o src/exploit/checkm8_spray.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/exploit/checkm8.o src/exploit/checkm8.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/exploit/checkm8_usb_tuning.o src/exploit/checkm8_usb_tuning.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/exploit/checkm8_patch.o src/exploit/checkm8_patch.c
+cc -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2  -I/usr/include/libusb-1.0 -I/usr/include/libusb-1.0   -I/usr/include/x86_64-linux-gnu  -DTR4MPASS_PLIST_LEGACY -include include/util/plist_compat.h -DTR4MPASS_IRECV_LEGACY -Iinclude -c -o src/exploit/checkm8_stages.o src/exploit/checkm8_stages.c
+src/exploit/checkm8_stages.c:224: error: unterminated #if
+  224 | #if defined(__linux__) && !defined(__APPLE__)
+      | 
+make: *** [Makefile:39: src/exploit/checkm8_stages.o] Error 1
+[-] Build failed. Check compiler output above.
+[*] If the linker reports 'library not found for -lssh2', install libssh2
+[*]   macOS:  brew install libssh2
+[*]   Debian: sudo apt install libssh2-1-dev
+[*]   Fedora: sudo dnf install libssh2-devel
+[*]   Arch:   sudo pacman -S libssh2
+ibim@ibim-ThinkPad-E14-Gen-2:~/tr4mpass$ sudo apt install libssh2-1-dev
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+libssh2-1-dev is already the newest version (1.10.0-3).
+0 upgraded, 0 newly installed, 0 to remove and 374 not upgraded.
+ibim@ibim-ThinkPad-E14-Gen-2:~/tr4mpass$ 
