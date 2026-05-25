@@ -37,22 +37,24 @@
 [INFO] checkm8: stage 1/4 -- reset DFU state
 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 58)
+[INFO] DFU device found (bus 3, addr 66)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
 [INFO] checkm8: [Linux xHCI] Cancelled! Guessing sent=128 (to prevent crash)
 [INFO] checkm8: stage 2 complete -- UAF triggered (sent=128, pad=1344)
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 58)
+[INFO] DFU device found (bus 3, addr 66)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 3/4 -- heap spray
 [INFO] checkm8: stage 3 complete -- heap spray done
 [INFO] checkm8: waiting for USB re-enumeration...
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/066, errno=19
+[ERROR] failed to open DFU device: Input/Output Error
 libusb: error [get_usbfs_fd] File doesn't exist, wait 10 ms and try again
-libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/058, errno=2
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/066, errno=2
 [ERROR] failed to open DFU device: No such device (it may have been disconnected)
-[INFO] DFU device found (bus 3, addr 59)
+[INFO] DFU device found (bus 3, addr 67)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 4/4 -- overwrite with payload
 [INFO] assemble_payload: notA9 variant: 2016 bytes (rop_prefix=1552 main=120 cfg=96 handle=192+56) CPID 0x8010
@@ -68,7 +70,10 @@ libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/05
 [INFO] checkm8: [stage4] send_overwrite: sending 48 bytes (bmReqType=0x02, bReq=0x03, wIndex=0x80)
 [INFO] checkm8: [stage4] send_overwrite: ret=-9 (Pipe error)
 [INFO] checkm8: [stage4] send_overwrite: STALL received (expected) -- overwrite landed in freed io_buffer
-[INFO] checkm8: [stage4] EP0 clear_halt ret=-5 (Entity not found)
+[INFO] checkm8: [stage4] EP0 reset: closing handle to reinitialise EP0...
+[INFO] DFU device found (bus 3, addr 67)
+libusb: error [op_set_configuration] set configuration failed, errno=110
+[INFO] checkm8: [stage4] EP0 reset: handle reopened (EP0 fresh)
 [INFO] checkm8: [stage4] overwrite OK -- proceeding to payload send
 [INFO] checkm8: [stage4] send_payload_chunks: sending 2016 bytes total
 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 chunk=2016
@@ -81,7 +86,7 @@ libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/05
 [INFO] exploit_deliver: all stages complete
 [INFO] checkm8_exploit: stage 4 done -- triggering USB bus reset to clear EP0...
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 59)
+[INFO] DFU device found (bus 3, addr 67)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] CPID: 0x8010
 [INFO] ECID: 0x0018792134908026
@@ -90,7 +95,7 @@ libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/05
 [WARN] checkm8_verify_pwned: PWND marker not found in serial
 [WARN] checkm8_exploit: not pwned after attempt 1
 [INFO] checkm8_exploit: waiting for device reset...
-[INFO] DFU device found (bus 3, addr 59)
+[INFO] DFU device found (bus 3, addr 67)
 [INFO] checkm8_exploit: USB handle re-acquired for retry 2
 [INFO] CPID: 0x8010
 [INFO] ECID: 0x0018792134908026
@@ -104,22 +109,24 @@ libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/05
 [INFO] checkm8: stage 1/4 -- reset DFU state
 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 59)
+[INFO] DFU device found (bus 3, addr 67)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=50 ms)
 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=49 ms)
 [INFO] checkm8: [Linux xHCI] Cancelled! Guessing sent=64 (to prevent crash)
 [INFO] checkm8: stage 2 complete -- UAF triggered (sent=64, pad=1408)
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 59)
+[INFO] DFU device found (bus 3, addr 67)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 3/4 -- heap spray
 [INFO] checkm8: stage 3 complete -- heap spray done
 [INFO] checkm8: waiting for USB re-enumeration...
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/067, errno=19
+[ERROR] failed to open DFU device: Input/Output Error
 libusb: error [get_usbfs_fd] File doesn't exist, wait 10 ms and try again
-libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/059, errno=2
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/067, errno=2
 [ERROR] failed to open DFU device: No such device (it may have been disconnected)
-[INFO] DFU device found (bus 3, addr 60)
+[INFO] DFU device found (bus 3, addr 68)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] checkm8: stage 4/4 -- overwrite with payload
 [INFO] assemble_payload: notA9 variant: 2016 bytes (rop_prefix=1552 main=120 cfg=96 handle=192+56) CPID 0x8010
@@ -135,7 +142,10 @@ libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/05
 [INFO] checkm8: [stage4] send_overwrite: sending 48 bytes (bmReqType=0x02, bReq=0x03, wIndex=0x80)
 [INFO] checkm8: [stage4] send_overwrite: ret=-9 (Pipe error)
 [INFO] checkm8: [stage4] send_overwrite: STALL received (expected) -- overwrite landed in freed io_buffer
-[INFO] checkm8: [stage4] EP0 clear_halt ret=-5 (Entity not found)
+[INFO] checkm8: [stage4] EP0 reset: closing handle to reinitialise EP0...
+[INFO] DFU device found (bus 3, addr 68)
+libusb: error [op_set_configuration] set configuration failed, errno=110
+[INFO] checkm8: [stage4] EP0 reset: handle reopened (EP0 fresh)
 [INFO] checkm8: [stage4] overwrite OK -- proceeding to payload send
 [INFO] checkm8: [stage4] send_payload_chunks: sending 2016 bytes total
 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 chunk=2016
@@ -148,7 +158,7 @@ libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/05
 [INFO] exploit_deliver: all stages complete
 [INFO] checkm8_exploit: stage 4 done -- triggering USB bus reset to clear EP0...
 [INFO] checkm8: waiting for USB re-enumeration...
-[INFO] DFU device found (bus 3, addr 60)
+[INFO] DFU device found (bus 3, addr 68)
 [INFO] checkm8: USB handle re-acquired (bus reset OK)
 [INFO] CPID: 0x8010
 [INFO] ECID: 0x0018792134908026
