@@ -446,7 +446,22 @@ send_payload_chunks: raising payload timeout from 50 to 1000 ms
 send_payload_chunks: offset=0 ret=-7 (Operation timed out)
 ```
 
-- New signal: after the first clean failed verification, later retries left the USB stack in a bad state and the serial read returned a corrupted 6-byte string (`43 ...`) instead of the normal DFU serial. This is not success, but it is the first post-stage4 behavior change since the early diagnostics.
+- New signal: after the first clean failed verification, later retries left the USB stack in a bad state and the serial read returned a corrupted 6-byte string instead of the normal DFU serial. This is not success, but it is the first post-stage4 behavior change since the early diagnostics.
+
+Observed corrupted serial reads:
+
+```text
+black: serial = "C...SvIe"  hex = [43 F0 53 76 49 65]
+white: serial = "C0...~...\"" hex = [43 30 93 7E FE 5C]
+```
+
+Why this matters:
+
+- Versions before this mostly returned to a clean DFU serial immediately after stage 4.
+- `v1.0.24` still does not show `PWND`, but both devices stop behaving like clean DFU after the longer payload `DNLOAD`.
+- The corrupted serial starts with `0x43` (`C`), matching the first byte of the original `CPID...` serial, but the rest is garbage. That suggests we may be disturbing the serial descriptor/string path or USB descriptor state rather than simply crashing before any effect.
+- This is therefore progress in diagnosis: stage 4 is now visibly changing host/device behavior after the payload request.
+- It also means follow-up attempts can contaminate the evidence. For future tests, pay special attention to the first verification immediately after stage 4, before retries run additional setup/reset logic.
 
 ## Current Hypothesis
 
