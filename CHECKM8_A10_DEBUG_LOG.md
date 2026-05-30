@@ -389,11 +389,39 @@ would produce exactly what we see: stage 4 timeout, then clean DFU serial.
 - This keeps the shellcode path but makes the handler-copy `memcpy()` a zero-length copy before the serial patch.
 - If `PWND` appears, the remaining bug is in the handler copy or handler payload placement.
 - If `PWND` still does not appear, the ROP jump/shellcode entry path is still the likely issue.
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- The diagnostic was active:
+
+```text
+assemble_payload: diagnostic handler copy disabled for A10 (payload_sz 248 -> 0)
+assemble_payload: payload_dest=0x1800AFF08 payload_off=216 payload_sz=0
+```
+
+- Because disabling the handler copy did not change the serial, the failure is earlier than the handler-copy `memcpy()` or in the pre-serial pointer patching.
+
+## Current Hypothesis
+
+The A10 shellcode may not be reaching its serial patch block. The current notA9 shellcode performs these operations before touching `gUSBSerialNumber`:
+
+- zero `dfu_handle_bus_reset`
+- patch `dfu_handle_request`
+- copy the checkm8 handler
+
+`v1.0.22` removed the copy size, but it still left the pointer writes before the serial patch.
+
+## Next Experiment
+
+### v1.0.23
+
+- Keep the same shellcode length and config layout, preserving all PC-relative literal offsets.
+- For A10 only, replace the pre-serial request-handler patch/copy instructions with ARM64 NOPs.
+- Also skip the final `patch_addr` write in this diagnostic shellcode so a late crash cannot erase the serial evidence.
+- Expected result: if ROP enters the shellcode at all, the first meaningful action should be the serial marker and descriptor update.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.22
-assemble_payload: diagnostic handler copy disabled ...
+checkm8_exploit: version 1.0.23
+assemble_payload: A10 diagnostic serial-first shellcode active
 ```
 
