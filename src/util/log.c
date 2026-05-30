@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdarg.h>
+#include <time.h>
 #include <unistd.h>
 #include "util/log.h"
 
@@ -27,12 +28,23 @@ void log_set_level(log_level_t level)
 static void log_vprint(log_level_t level, const char *color,
                        const char *tag, const char *fmt, va_list ap)
 {
+    time_t now;
+    struct tm tm_now;
+    char timestamp[9];
+
     if (level < g_level)
         return;
-    if (should_use_color())
-        fprintf(stderr, "%s%s ", color, tag);
+
+    now = time(NULL);
+    if (localtime_r(&now, &tm_now) != NULL)
+        strftime(timestamp, sizeof(timestamp), "%H:%M:%S", &tm_now);
     else
-        fprintf(stderr, "%s ", tag);
+        snprintf(timestamp, sizeof(timestamp), "--:--:--");
+
+    if (should_use_color())
+        fprintf(stderr, "%s%s %s ", color, timestamp, tag);
+    else
+        fprintf(stderr, "%s %s ", timestamp, tag);
     vfprintf(stderr, fmt, ap);
     if (should_use_color())
         fprintf(stderr, "%s\n", ANSI_RESET);
