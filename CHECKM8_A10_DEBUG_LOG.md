@@ -480,11 +480,41 @@ The 1000 ms payload request may be getting far enough to disturb iBoot/USB state
 - Keep the 1000 ms payload DATA-stage timeout.
 - For ROP-prefix chips, send a bounded gaster-style suffix and zero-length DNLOAD after the payload.
 - Skip the three status polls for ROP-prefix chips in this diagnostic, because earlier logs showed they only consume time after EP0 is already wedged.
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- The bounded finalizer was active, but both follow-up requests timed out:
+
+```text
+bounded finalize for ROP-prefix chip (timeout=1000 ms, no status polls)
+send_dfu_finalize: suffix send failed: Operation timed out
+send_dfu_finalize: zero-length send failed: Operation timed out
+```
+
+- Unlike `v1.0.24`, this run returned clean DFU serials on every verification. The bounded finalizer did not preserve or improve the corrupted-serial signal.
+
+## Important Correction
+
+The `serial-first` diagnostic introduced in `v1.0.23` NOPed too much of the shellcode prologue. It skipped not only the handler patch/copy path, but also:
+
+```text
+ldr x2, =dfu_handle_bus_reset
+str xzr, [x2]
+```
+
+That means any successful in-memory serial patch could be erased by the host bus reset before verification, because iBoot's normal bus-reset handler was still active. This makes `v1.0.23` through `v1.0.25` weaker than intended as serial-patch diagnostics.
+
+## Next Experiment
+
+### v1.0.26
+
+- Keep the A10 serial-first diagnostic, but preserve the `dfu_handle_bus_reset = NULL` write.
+- NOP only the `dfu_handle_request` patch and handler-copy setup/call.
+- Keep the 1000 ms payload DATA-stage timeout.
+- Skip the bounded finalizer again for ROP-prefix chips, since `v1.0.25` only timed out and removed the `v1.0.24` corrupted-serial signal.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.25
-bounded finalize for ROP-prefix chip
+checkm8_exploit: version 1.0.26
+A10 diagnostic serial-first shellcode active (bus-reset null preserved)
 ```
 
