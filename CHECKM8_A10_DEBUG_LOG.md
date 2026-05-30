@@ -438,11 +438,38 @@ The single stage 4 payload `DFU_DNLOAD` returns `Operation timed out` at `offset
 - Increase only the stage 4 payload `DNLOAD` timeout to at least `1000ms`.
 - Leave stage 2 timing unchanged, because the UAF setup depends on the short abort timing.
 - Expected signal: if payload bytes were previously truncated by the 50 ms timeout, `send_payload_chunks` may return `2016` or at least produce a different post-stage4 behavior.
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- The payload send still timed out at `offset=0`, now after roughly one second:
+
+```text
+send_payload_chunks: raising payload timeout from 50 to 1000 ms
+send_payload_chunks: offset=0 ret=-7 (Operation timed out)
+```
+
+- New signal: after the first clean failed verification, later retries left the USB stack in a bad state and the serial read returned a corrupted 6-byte string (`43 ...`) instead of the normal DFU serial. This is not success, but it is the first post-stage4 behavior change since the early diagnostics.
+
+## Current Hypothesis
+
+The 1000 ms payload request may be getting far enough to disturb iBoot/USB state, but we still do not perform the two follow-up `DFU_DNLOAD` requests that `gaster` sends after payload:
+
+- 16-byte zero suffix
+- zero-length DNLOAD
+
+`v1.0.15` tried the full finalizer before the later shellcode and timeout diagnostics; it only produced long waits. Retesting a bounded version now gives us a cleaner answer without another 25-second dead wait.
+
+## Next Experiment
+
+### v1.0.25
+
+- Keep the A10 serial-first diagnostic shellcode.
+- Keep the 1000 ms payload DATA-stage timeout.
+- For ROP-prefix chips, send a bounded gaster-style suffix and zero-length DNLOAD after the payload.
+- Skip the three status polls for ROP-prefix chips in this diagnostic, because earlier logs showed they only consume time after EP0 is already wedged.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.24
-send_payload_chunks: sending 2016 bytes total (timeout=1000 ms)
+checkm8_exploit: version 1.0.25
+bounded finalize for ROP-prefix chip
 ```
 
