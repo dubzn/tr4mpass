@@ -120,11 +120,47 @@ data=2016 transfer=2048 pad=32
 - Send exact `data_sz` (`2016`) instead of padded `2048` for A10/ROP-prefix payloads.
 - Keep the gaster-style zeroed `io_buffer/io_len` overwrite from `v1.0.12`.
 - Add an `INFO` log of overwrite fields so the next run visibly confirms the zeroed fields.
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- Logs confirmed:
+  - `data=2016 transfer=2016 pad=0`
+  - `patch=0x1020074AC`
+  - `io_buffer=0x0 io_len=0x0 callback=0x10000CC6C next=0x1800B0000`
+- This rules out the padding and A10 overwrite mismatch as the primary cause.
+
+## Current Hypothesis
+
+The remaining high-confidence mismatch is the ARM64 notA9 shellcode itself. Our payload bytes were a hybrid sequence: it patched `dfu_handle_request` first and only zeroed `dfu_handle_bus_reset` at the end via a locally edited instruction. `gaster`'s `payload_notA9.S` zeroes `dfu_handle_bus_reset` first, then patches `dfu_handle_request`, and its config layout is:
+
+```c
+pwnd[2]
+payload_dest
+dfu_handle_bus_reset
+dfu_handle_request
+payload_off
+payload_sz
+memcpy_addr
+gUSBSerialNumber
+usb_create_string_descriptor
+usb_serial_number_string_descriptor
+patch_addr
+```
+
+## Next Experiment
+
+### v1.0.14
+
+- Replace the ARM64 notA9 shellcode instruction sequence with the exact `gaster` flow.
+- Reorder `notA9_config_t` to match `gaster` exactly.
+- Keep:
+  - gaster TTBR0 values
+  - `patch=0x1020074AC`
+  - gaster-style zeroed overwrite
+  - exact `2016` payload transfer
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.13
+checkm8_exploit: version 1.0.14
 assemble_payload: ... patch=0x1020074AC ...
 build_overwrite_64: io_buffer=0x0 io_len=0x0 callback=... next=...
 send_payload_chunks: sending 2016 bytes total
