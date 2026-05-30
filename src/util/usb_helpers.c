@@ -23,17 +23,6 @@ void usb_helpers_set_event_ctx(libusb_context *ctx)
     g_usb_event_ctx = ctx;
 }
 
-/*
- * is_transient_usb_error -- Returns 1 if the libusb error code
- * represents a transient condition that may succeed on retry.
- * LIBUSB_ERROR_PIPE (-9) means the device STALLed the endpoint,
- * which is common during DFU operations and often clears on retry.
- */
-static int is_transient_usb_error(int err)
-{
-    return (err == LIBUSB_ERROR_PIPE || err == LIBUSB_ERROR_TIMEOUT);
-}
-
 int usb_ctrl_transfer(libusb_device_handle *dev,
                       uint8_t bmRequestType,
                       uint8_t bRequest,
@@ -172,11 +161,26 @@ int usb_ctrl_transfer_async_abort(libusb_device_handle *dev,
     case LIBUSB_TRANSFER_TIMED_OUT:
 #if defined(__linux__) && !defined(__APPLE__)
         if (cancelled) {
-            ret = 0; /* Workaround for xHCI usbfs reporting wLength when cancelled */
+            /*
+             * Linux xHCI may report the requested OUT length for a cancelled
+             * DFU_DNLOAD even though only a few packets reached the device.
+             * Keep returning 0 there so checkm8_stage_setup can apply its
+             * explicit 128/64/0 sent-byte guesses.
+             *
+             * Do not force cancelled IN transfers to 0: the checkm8
+             * leak/no-leak/stall probes are GET_DESCRIPTOR requests, and
+             * treating every cancelled IN as zero makes stage 3 accept a
+             * possibly wrong heap state.
+             */
+            if ((bmRequestType & LIBUSB_ENDPOINT_IN) == 0)
+                ret = 0;
+            else
+                ret = (int)transfer->actual_length;
         } else {
             ret = (int)transfer->actual_length;
         }
 #else
+        (void)cancelled;
         ret = (int)transfer->actual_length;
 #endif
         break;

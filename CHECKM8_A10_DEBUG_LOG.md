@@ -248,11 +248,33 @@ This matters because the ROP chain switches TTBR0 to the crafted table before ju
   - from `insecure_memory_base + rop_prefix_sz`
   - to `insecure_memory_base + ARM_16K_TT_L2_SZ + rop_prefix_sz`
 - Keep `MAX_EXPLOIT_TRIES=3` so the new jump is tested with guesses `128`, `64`, and `0`.
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- The logs confirmed the new jump address:
+
+```text
+assemble_payload: exec_addr=0x1820B0610
+```
+
+- All three Linux guesses still reached stage 4, timed out on the 2016-byte payload transfer, and returned as clean DFU.
+
+## Current Hypothesis
+
+The Linux async-transfer workaround is too broad.
+
+`usb_ctrl_transfer_async_abort()` currently forces any cancelled transfer to return `0` on Linux. That was intended for the stage 2 OUT `DFU_DNLOAD`, where usbfs can report the full requested length even after cancellation and we use explicit guesses (`128`, `64`, `0`).
+
+The same helper is also used by stage 3 IN `GET_DESCRIPTOR` leak/no-leak/stall probes. For those probes, forcing every cancelled IN transfer to `0` can make stage 3 report success even if the actual leak geometry is wrong.
+
+## Next Experiment
+
+### v1.0.18
+
+- Keep the Linux cancelled-transfer `0` workaround only for OUT transfers.
+- Return `transfer->actual_length` for cancelled IN transfers so stage 3 decisions are based on the real descriptor-transfer result.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.17
-assemble_payload: exec_addr=0x1820B0610 ...
+checkm8_exploit: version 1.0.18
 ```
 
