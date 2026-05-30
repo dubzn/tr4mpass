@@ -301,11 +301,43 @@ Our code used a fixed `500ms` timeout and still treated non-timeout/non-IO negat
 
 - Send the payload with `checkm8_usb_timeout_ms()` instead of hardcoded `500ms`.
 - Treat all negative payload DNLOAD results as non-fatal/unknown, matching `gaster`'s `transfer_ret=NULL` behavior.
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- Logs confirmed the payload now uses the global timeout:
+
+```text
+send_payload_chunks: sending 2016 bytes total (timeout=50 ms)
+```
+
+- Stage 4 still times out immediately on the first payload DNLOAD and returns as clean DFU.
+- New signal in `src/log_black.txt`: attempt 2 exhausted stage 2 retries before reaching spray/patch, but current logs do not show the failed pad request values.
+
+## Current Hypothesis
+
+We need better visibility into the heap-shaping stages before changing payload logic again.
+
+The code currently logs only "stage 3 complete" and "UAF triggered", but not:
+
+- how many attempts `checkm8_stall()` needed
+- whether each `no_leak` hole succeeded immediately or after retries
+- what `pad_ret` was when the stage 2 guessed-send path did not get a STALL
+
+Without this, multiple distinct failure modes look identical in the logs.
+
+## Next Experiment
+
+### v1.0.20
+
+- Add INFO diagnostics for stage 2 pad failures when Linux guessed-send values are used.
+- Add INFO diagnostics for A10/path-B spray:
+  - `checkm8_stall` success attempts
+  - each `no_leak` hole attempt count
+  - final `leak/no_leak` loop attempt count
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.19
-send_payload_chunks: ... timeout=50 ms ...
+checkm8_exploit: version 1.0.20
+checkm8_stage_spray: path B ...
+checkm8_stall: success ...
 ```
 
