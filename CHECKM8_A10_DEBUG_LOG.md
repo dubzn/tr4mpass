@@ -93,45 +93,40 @@ This document tracks the A10 / CPID `0x8010` checkm8 experiments so we do not re
 - Log confirmed `patch=0x1020074AC`.
 - Result: no `PWND`; still returns as clean DFU.
 
+### v1.0.12
+
+- Changed the A10/TLBI overwrite to match `gaster`:
+  - left `io_buffer = 0`
+  - left `io_len = 0`
+  - set `callback = nop_gadget`
+  - set `next = insecure_memory_base`
+- Result from `src/log_white.txt`: no `PWND`; still times out on the first payload DNLOAD and returns as clean DFU.
+- This means the non-gaster overwrite fields were not the primary cause.
+
 ## Current Hypothesis
 
-The next strongest mismatch with `gaster` is the A10 overwrite structure. Our code has been setting:
+With the overwrite now matching `gaster`, the remaining active divergence is the forced 2048-byte payload transfer. Our current code sends:
 
 ```c
-io_buffer = insecure_memory_base;
-io_len = DFU_MAX_TRANSFER_SZ;
-callback = nop_gadget;
-next = insecure_memory_base;
+data=2016 transfer=2048 pad=32
 ```
 
-`gaster` leaves `io_buffer` and `io_len` zero for the A10/TLBI path and only sets:
-
-```c
-callback = nop_gadget;
-next = insecure_memory_base;
-```
+`gaster` sends `data_sz` exactly in its stage patch loop. The padding was useful to test the old `io_len=2048` hypothesis, but after `v1.0.12` it is no longer gaster-compatible.
 
 ## Next Experiment
 
-### v1.0.12
+### v1.0.13
 
-- Make the A10/TLBI overwrite match `gaster`:
-  - leave `io_buffer = 0`
-  - leave `io_len = 0`
-  - set `callback = nop_gadget`
-  - set `next = insecure_memory_base`
-- Keep all other recent changes unchanged:
-  - TTBR0 values from `gaster`
-  - `patch=0x1020074AC`
-  - padded 2048-byte payload transfer
-  - post-stage-4 reset
-  - timestamped logs
+- Send exact `data_sz` (`2016`) instead of padded `2048` for A10/ROP-prefix payloads.
+- Keep the gaster-style zeroed `io_buffer/io_len` overwrite from `v1.0.12`.
+- Add an `INFO` log of overwrite fields so the next run visibly confirms the zeroed fields.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.12
+checkm8_exploit: version 1.0.13
 assemble_payload: ... patch=0x1020074AC ...
 build_overwrite_64: io_buffer=0x0 io_len=0x0 callback=... next=...
+send_payload_chunks: sending 2016 bytes total
 ```
 
