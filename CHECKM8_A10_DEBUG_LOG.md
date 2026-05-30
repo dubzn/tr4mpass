@@ -417,11 +417,32 @@ The A10 shellcode may not be reaching its serial patch block. The current notA9 
 - For A10 only, replace the pre-serial request-handler patch/copy instructions with ARM64 NOPs.
 - Also skip the final `patch_addr` write in this diagnostic shellcode so a late crash cannot erase the serial evidence.
 - Expected result: if ROP enters the shellcode at all, the first meaningful action should be the serial marker and descriptor update.
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- The diagnostic shellcode was active:
+
+```text
+assemble_payload: A10 diagnostic serial-first shellcode active (pre-serial request patch/copy NOPed)
+```
+
+- Because the serial still does not change, either the ROP chain is not entering the shellcode or the stage 4 payload transfer is not actually completing before the timeout.
+
+## Current Hypothesis
+
+The single stage 4 payload `DFU_DNLOAD` returns `Operation timed out` at `offset=0` with the 50 ms gaster-style USB timeout. We have been treating that as "completion unknown", but with the serial-first shellcode it is now plausible that the timeout is happening before the 2016-byte DATA stage reliably reaches `insecure_memory_base`.
+
+## Next Experiment
+
+### v1.0.24
+
+- Keep the A10 serial-first diagnostic shellcode.
+- Increase only the stage 4 payload `DNLOAD` timeout to at least `1000ms`.
+- Leave stage 2 timing unchanged, because the UAF setup depends on the short abort timing.
+- Expected signal: if payload bytes were previously truncated by the 50 ms timeout, `send_payload_chunks` may return `2016` or at least produce a different post-stage4 behavior.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.23
-assemble_payload: A10 diagnostic serial-first shellcode active
+checkm8_exploit: version 1.0.24
+send_payload_chunks: sending 2016 bytes total (timeout=1000 ms)
 ```
 
