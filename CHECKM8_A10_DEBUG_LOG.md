@@ -358,11 +358,42 @@ If the timeout fires while the ROP chain/shellcode is still running, the immedia
 
 - Add a short post-stage4 settle delay before `libusb_reset_device()`.
 - Keep it small (`250ms`) so we test the race without returning to the earlier multi-second dead wait.
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- The delay appeared in logs and did not change the result:
+
+```text
+checkm8_exploit: stage 4 done -- waiting 250 ms before USB bus reset...
+```
+
+- Stage 2 and stage 3 still consistently succeed; stage 4 still times out on payload DNLOAD and returns clean DFU.
+
+## Current Hypothesis
+
+The shellcode may be crashing before it reaches the serial patch. In `gaster`'s `payload_notA9.S`, the shellcode copies the request handler with `memcpy()` before it appends `PWND:[checkm8]` to `gUSBSerialNumber`.
+
+That means a crash in:
+
+- `payload_dest`
+- `payload_off`
+- `payload_sz`
+- `memcpy_addr`
+- the handler-copy source/destination mapping
+
+would produce exactly what we see: stage 4 timeout, then clean DFU serial.
+
+## Next Experiment
+
+### v1.0.22
+
+- Diagnostic only: set `payload_sz=0` for A10/ROP-prefix payloads.
+- This keeps the shellcode path but makes the handler-copy `memcpy()` a zero-length copy before the serial patch.
+- If `PWND` appears, the remaining bug is in the handler copy or handler payload placement.
+- If `PWND` still does not appear, the ROP jump/shellcode entry path is still the likely issue.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.21
-stage 4 done -- waiting 250 ms before USB bus reset
+checkm8_exploit: version 1.0.22
+assemble_payload: diagnostic handler copy disabled ...
 ```
 
