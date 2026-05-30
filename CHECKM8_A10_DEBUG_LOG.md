@@ -510,11 +510,32 @@ That means any successful in-memory serial patch could be erased by the host bus
 - NOP only the `dfu_handle_request` patch and handler-copy setup/call.
 - Keep the 1000 ms payload DATA-stage timeout.
 - Skip the bounded finalizer again for ROP-prefix chips, since `v1.0.25` only timed out and removed the `v1.0.24` corrupted-serial signal.
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- The corrected diagnostic was active:
+
+```text
+assemble_payload: A10 diagnostic serial-first shellcode active (bus-reset null preserved, request patch/copy NOPed)
+```
+
+- Both devices returned clean DFU serials on every verification. Preserving `dfu_handle_bus_reset = NULL` did not expose a hidden serial patch.
+
+## Current Hypothesis
+
+The serial-first diagnostic may be too synthetic. It proves that this diagnostic form does not visibly patch the serial, but it also removes the handler patch/copy behavior that `gaster` normally performs before serial update. We have not yet tested the full gaster-style notA9 shellcode together with the newer 1000 ms stage 4 payload timeout.
+
+## Next Experiment
+
+### v1.0.27
+
+- Restore the full A10/notA9 shellcode path.
+- Keep the 1000 ms payload DATA-stage timeout from `v1.0.24+`.
+- Keep ROP-prefix finalizer skipped because `v1.0.25` showed bounded suffix/zero-length DNLOAD only time out.
+- This tests the closest-to-gaster shellcode behavior under the only payload timing that produced a different USB/serial state.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.26
-A10 diagnostic serial-first shellcode active (bus-reset null preserved)
+checkm8_exploit: version 1.0.27
+assemble_payload: A10 full shellcode path active
 ```
 
