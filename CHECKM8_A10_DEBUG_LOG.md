@@ -332,12 +332,37 @@ Without this, multiple distinct failure modes look identical in the logs.
   - `checkm8_stall` success attempts
   - each `no_leak` hole attempt count
   - final `leak/no_leak` loop attempt count
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- The diagnostics narrowed the failure:
+  - stage 2 UAF triggers for guesses `128`, `64`, and `0`
+  - stage 3 path B consistently succeeds
+  - `checkm8_stall` succeeds in 3 attempts with `ret=0`, `abort=0 ms`
+  - all 5 `no_leak` holes succeed in 1 attempt
+  - final `leak/no_leak` succeeds in 1 attempt
+- Therefore the remaining failure is concentrated in stage 4 payload execution/observation.
+
+## Current Hypothesis
+
+After stage 4, the code resets USB immediately after the payload DNLOAD timeout:
+
+```text
+send_payload_chunks: ... transfer completion unknown, payload may be executing
+checkm8_exploit: stage 4 done -- triggering USB bus reset ...
+```
+
+If the timeout fires while the ROP chain/shellcode is still running, the immediate host reset may interrupt the very window where serial patching and descriptor creation happen.
+
+## Next Experiment
+
+### v1.0.21
+
+- Add a short post-stage4 settle delay before `libusb_reset_device()`.
+- Keep it small (`250ms`) so we test the race without returning to the earlier multi-second dead wait.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.20
-checkm8_stage_spray: path B ...
-checkm8_stall: success ...
+checkm8_exploit: version 1.0.21
+stage 4 done -- waiting 250 ms before USB bus reset
 ```
 
