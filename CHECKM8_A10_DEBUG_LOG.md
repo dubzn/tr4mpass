@@ -271,10 +271,41 @@ The same helper is also used by stage 3 IN `GET_DESCRIPTOR` leak/no-leak/stall p
 
 - Keep the Linux cancelled-transfer `0` workaround only for OUT transfers.
 - Return `transfer->actual_length` for cancelled IN transfers so stage 3 decisions are based on the real descriptor-transfer result.
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- Stage 3 still completed immediately and stage 4 behaved the same:
+  - expected overwrite STALL
+  - payload DNLOAD timeout
+  - clean DFU serial after reset
+- This suggests the broad cancelled-IN workaround was not the main blocker.
+
+## Current Hypothesis
+
+The payload DNLOAD path still diverges from `gaster`.
+
+`gaster` sends the payload with:
+
+```c
+send_usb_control_request(handle, 0x21, DFU_DNLOAD, 0, 0, &data[i], packet_sz, NULL)
+```
+
+On Linux, that means:
+
+- timeout is the global `usb_timeout`
+- return status is intentionally ignored because `transfer_ret == NULL`
+
+Our code used a fixed `500ms` timeout and still treated non-timeout/non-IO negative returns as hard failures.
+
+## Next Experiment
+
+### v1.0.19
+
+- Send the payload with `checkm8_usb_timeout_ms()` instead of hardcoded `500ms`.
+- Treat all negative payload DNLOAD results as non-fatal/unknown, matching `gaster`'s `transfer_ret=NULL` behavior.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.18
+checkm8_exploit: version 1.0.19
+send_payload_chunks: ... timeout=50 ms ...
 ```
 
