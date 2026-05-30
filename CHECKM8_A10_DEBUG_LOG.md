@@ -532,10 +532,46 @@ The serial-first diagnostic may be too synthetic. It proves that this diagnostic
 - Keep ROP-prefix finalizer skipped because `v1.0.25` showed bounded suffix/zero-length DNLOAD only time out.
 - This tests the closest-to-gaster shellcode behavior under the only payload timing that produced a different USB/serial state.
 
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- Full shellcode + 1000 ms payload timeout returned clean DFU serials on every verification.
+- Unlike `v1.0.24`, no corrupted-serial signal appeared. That earlier signal likely came from the artificial serial-first shellcode, not from payload timing alone.
+
+## Important Correction
+
+`v1.0.12` fixed the overwrite *fields* (`io_buffer/io_len` zeroed, `callback=nop_gadget`, `next=insecure_memory_base`) but the stage 4 code still sent the overwrite through the wrong USB request:
+
+```text
+bmReqType=0x02, bReq=0x03, wIndex=0x80   /* SET_FEATURE HALT -- stage 3 stall probe */
+```
+
+`gaster` sends the overwrite with:
+
+```text
+bmReqType=0x00, bReq=0x00, wValue=0, wIndex=0
+```
+
+The STALL we logged as "overwrite landed in freed io_buffer" was therefore very likely just the EP0 halt/STALL from the wrong request, not confirmation that the callback structure was written. Additional gaster divergences still present in our tree:
+
+- missing `heap_pad_0/heap_pad_1` in `checkm8_overwrite_t` (48 bytes sent instead of 64)
+- missing the pre-payload `DFU_DNLOAD` of `EP0_MAX_PACKET_SZ` (64 bytes) between overwrite STALL and payload
+- ROP-prefix finalizer skipped since `v1.0.15`/`v1.0.25`, while `gaster` always runs suffix + zero-length DNLOAD + status polls
+
+## Next Experiment
+
+### v1.0.28
+
+- Send overwrite via gaster's `(0,0,0,0)` control transfer.
+- Add `heap_pad_0/heap_pad_1` magic values to the A10 overwrite blob.
+- Send the 64-byte pre-payload `DFU_DNLOAD` after overwrite STALL.
+- Restore gaster-style DFU finalize for ROP-prefix chips.
+- Drop the 1000 ms payload timeout diagnostic; use normal `usb_timeout` again.
+
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.27
-assemble_payload: A10 full shellcode path active
+checkm8_exploit: version 1.0.28
+send_overwrite: sending 64 bytes (bmReqType=0x00, bReq=0x00, wValue=0, wIndex=0)
+pre-payload DNLOAD (64 bytes)
+send_dfu_finalize: suffix send ret=...
 ```
 
