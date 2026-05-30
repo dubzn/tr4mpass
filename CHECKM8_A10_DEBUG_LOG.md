@@ -183,14 +183,39 @@ even after the payload transfer used `transfer_ret = NULL`.
 
 - Run `send_dfu_finalize()` for A10/ROP-prefix chips too.
 - Log each finalize step at info/warn level so we can tell whether suffix, zero-length DNLOAD, or status checks answer.
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- Finalize did not progress the device:
+  - suffix DNLOAD timed out
+  - zero-length DNLOAD timed out
+  - all three status checks timed out
+- It only added about 25 seconds per attempt, then returned as clean DFU.
+
+## Current Hypothesis
+
+On Linux, stage 2 uses guessed async-transfer byte counts because usbfs does not report the cancelled transfer's actual length. The current macro attempt sequence tries guesses `128` then `64`, but `MAX_EXPLOIT_TRIES` is `2`, so we never test guess `0`.
+
+Logs show:
+
+```text
+attempt 1: [Linux xHCI] Guessing sent=128
+attempt 2: [Linux xHCI] Guessing sent=64
+```
+
+If the actual cancelled transfer length is closer to `0`, stage 2 may report "UAF triggered" but leave the heap geometry wrong for stage 4.
+
+## Next Experiment
+
+### v1.0.16
+
+- Re-skip ROP-prefix DFU finalization because `v1.0.15` showed it only times out.
+- Increase `MAX_EXPLOIT_TRIES` from `2` to `3` so a single run covers Linux guesses `128`, `64`, and `0`.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.15
-assemble_payload: ... patch=0x1020074AC ...
-send_dfu_finalize: suffix ...
-send_dfu_finalize: zero-length ...
-send_dfu_finalize: status...
+checkm8_exploit: version 1.0.16
+attempt 1/3 ... Guessing sent=128
+attempt 2/3 ... Guessing sent=64
+attempt 3/3 ... Guessing sent=0
 ```
 
