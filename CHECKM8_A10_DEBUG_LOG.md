@@ -156,13 +156,41 @@ patch_addr
   - `patch=0x1020074AC`
   - gaster-style zeroed overwrite
   - exact `2016` payload transfer
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`; still returns as clean DFU.
+- This makes shellcode/config layout much less likely to be the remaining mismatch.
+
+## Current Hypothesis
+
+The next active mismatch with `gaster` is DFU finalization after payload. Our code still skips finalization for ROP-prefix chips, logging:
+
+```text
+skipping DFU finalize (ROP-prefix chip -- device will re-enumerate naturally)
+```
+
+`gaster` always sends:
+
+```c
+DFU_DNLOAD 16 zero bytes
+DFU_DNLOAD zero-length
+GET_STATUS MANIFEST_SYNC / MANIFEST / MANIFEST_WAIT_RESET
+```
+
+even after the payload transfer used `transfer_ret = NULL`.
+
+## Next Experiment
+
+### v1.0.15
+
+- Run `send_dfu_finalize()` for A10/ROP-prefix chips too.
+- Log each finalize step at info/warn level so we can tell whether suffix, zero-length DNLOAD, or status checks answer.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.14
+checkm8_exploit: version 1.0.15
 assemble_payload: ... patch=0x1020074AC ...
-build_overwrite_64: io_buffer=0x0 io_len=0x0 callback=... next=...
-send_payload_chunks: sending 2016 bytes total
+send_dfu_finalize: suffix ...
+send_dfu_finalize: zero-length ...
+send_dfu_finalize: status...
 ```
 
