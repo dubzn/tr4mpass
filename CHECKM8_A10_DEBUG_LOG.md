@@ -209,13 +209,50 @@ If the actual cancelled transfer length is closer to `0`, stage 2 may report "UA
 
 - Re-skip ROP-prefix DFU finalization because `v1.0.15` showed it only times out.
 - Increase `MAX_EXPLOIT_TRIES` from `2` to `3` so a single run covers Linux guesses `128`, `64`, and `0`.
+- Result from both `src/log_white.txt` and `src/log_black.txt`: no `PWND`.
+- All three Linux guesses were tested and behaved the same:
+  - `Guessing sent=128`
+  - `Guessing sent=64`
+  - `Guessing sent=0`
+- Each attempt reached stage 4, got the expected overwrite STALL, timed out on the 2016-byte payload transfer, then returned as clean DFU.
+
+## Current Hypothesis
+
+The ROP callback jump address differs from `gaster`.
+
+Our logs show:
+
+```text
+assemble_payload: exec_addr=0x1800B0610
+```
+
+But `gaster` builds the execution callback as:
+
+```c
+insecure_memory_base + ARM_16K_TT_L2_SZ + ttbr0_sram_off + 2 * sizeof(uint64_t)
+```
+
+For A10 that is:
+
+```text
+0x1800B0000 + 0x2000000 + 0x610 = 0x1820B0610
+```
+
+This matters because the ROP chain switches TTBR0 to the crafted table before jumping. The second SRAM L2 alias is the executable mapping; jumping to the raw insecure memory address can fetch through the wrong descriptor.
+
+## Next Experiment
+
+### v1.0.17
+
+- Change ROP-prefix `exec_addr` to match `gaster`:
+  - from `insecure_memory_base + rop_prefix_sz`
+  - to `insecure_memory_base + ARM_16K_TT_L2_SZ + rop_prefix_sz`
+- Keep `MAX_EXPLOIT_TRIES=3` so the new jump is tested with guesses `128`, `64`, and `0`.
 
 Expected log signal:
 
 ```text
-checkm8_exploit: version 1.0.16
-attempt 1/3 ... Guessing sent=128
-attempt 2/3 ... Guessing sent=64
-attempt 3/3 ... Guessing sent=0
+checkm8_exploit: version 1.0.17
+assemble_payload: exec_addr=0x1820B0610 ...
 ```
 
