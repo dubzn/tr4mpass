@@ -712,25 +712,66 @@ Solución candidata: llamar `libusb_reset_device()` **después** del overwrite S
 
 **Riesgo:** el bus reset puede disturbar el estado de la heap si el BootROM procesa el reset antes de que el callback de la overwrite sea invocado. Pero dado que el STALL ya confirmó que el overwrite llegó, el callback ya está en memoria — solo necesitamos que el BootROM lo ejecute.
 
-## Next Experiment
 
-### v1.0.34 — USB reset entre overwrite STALL y payload send
+### v1.0.34 — resultado en hardware (white + black, 2026-05-31 ~13:04–13:06)
 
-- Después del overwrite STALL (confirmado en logs), llamar `libusb_reset_device()`.
-- Esperar re-enumeración del device (polling por addr nuevo).
-- Enviar el payload DFU_DNLOAD en el handle fresco.
-- **No** usar pre-payload DNLOAD de 64 bytes (no está en gaster main).
-- **Señal esperada:** addr USB cambia entre overwrite y payload send, y/o el payload DNLOAD devuelve algo distinto de timeout inmediato.
+**⚡ BREAKTHROUGH — payload delivered for the first time.**
 
-```text
-log esperado:
-send_overwrite: STALL received
-[stage4] USB reset to clear EP0 after overwrite STALL...
-DFU device found (bus 3, addr N+1)    ← addr NUEVO
-send_payload_chunks: offset=0 ret=2016 ← o ret diferente de -7
+| Métrica | v1.0.33 (sin reset) | v1.0.34 (con reset) |
+|---------|---------------------|---------------------|
+| Payload DNLOAD | timeout @ offset 0, 1000 ms | **ret=2016 (2016 bytes ENTREGADOS)** |
+| Finalize suffix | timeout | **ret=16 ✅** |
+| Finalize zero-len | timeout | **ret=0 ✅** |
+| status1 | skip | **state=0x06 (MANIFEST_SYNC) ✅** |
+| status2 | skip | **state=0x07 (MANIFEST) ✅** |
+| status3 | skip | **state=0x08 (MANIFEST_WAIT_RESET) ✅** |
+| PWND | No | **No** |
+| Serial | limpio len=98 | limpio len=98 |
+
+**La hipótesis EP0-HALT en Linux era correcta.** El bus reset entre overwrite STALL y payload send libera EP0 y el BootROM recibe los 2016 bytes completos. La DFU state machine completa el ciclo `MANIFEST_SYNC → MANIFEST → MANIFEST_WAIT_RESET` como se espera después de un DFU download exitoso.
+
+**Nuevo problema:** El serial sigue limpio después del stage 4. El ROP chain se entrega pero el shellcode no parchea el serial string. Esto apunta a un fallo en el ROP chain o el shellcode, **no** en la plomería USB.
+
+**Nota sobre `ret=2016 (Other error)`:** libusb reporta `Other error` pero transfirió los 2016 bytes. Esto es coherente con que el BootROM empezó a ejecutar el ROP callback durante o justo después del STATUS phase del DFU_DNLOAD — el dispositivo interrumpió el STATUS phase al entrar al callback, que libusb interpreta como error del transfer aunque el DATA stage fue exitoso.
+
+**Nota sobre `usb_timeout=5 ms`:** Correcto — gaster usa 5ms por default (confirmado en `gaster.c` línea 1632: `usb_timeout = 5`). No es un bug.
+
+## Current Hypothesis (post v1.0.34)
+
+La plomería USB está resuelta. El payload se entrega. El problema está en el **ROP chain / shellcode**:
+
+1. El bus reset entre overwrite STALL y payload send **destruye el heap state** antes de que el BootROM ejecute el callback:
+   - El overwrite llega (STALL confirmado).
+   - El bus reset llega al BootROM como un `dfu_handle_bus_reset` event.
+   - **El BootROM puede limpiar el estado DFU** durante el bus reset, sobreescribiendo el freed io_buffer donde pusimos el overwrite.
+   - El payload llega pero ya no hay overwrite → el callback original del BootROM ejecuta → DFU normal → serial limpio.
+
+2. Alternativamente: el ROP chain sí ejecuta pero falla en algún paso (TTBR0 switch, exec_addr incorrecto, etc.).
+
+**Diferenciador clave:** si el bus reset destruye el overwrite, el addr USB NO debería cambiar después del stage 4. Si el ROP ejecuta parcialmente, podríamos ver un addr DIFERENTE (el reset proveniente del shellcode).
+
+**Observación:** En el log black, el addr post-stage4 es **el mismo** que el addr con el que entramos al stage 4 (105→105, 106→106, 107→107). Esto es consistente con la hipótesis 1: el bus reset destruye el overwrite antes del payload.
+
+## Next Experiments
+
+### v1.0.35 — Eliminar el bus reset post-overwrite, usar CLEAR_HALT en su lugar
+
+En lugar de `libusb_reset_device()` (que manda señal USB bus reset al BootROM, potencialmente destruyendo el heap), intentar limpiar el HALT de EP0 sin un bus reset completo:
+
+**Opción A: `usb_clear_halt` en EP0 (si el kernel lo permite)**
+```c
+libusb_clear_halt(usb, 0x00);  /* EP0 OUT */
+libusb_clear_halt(usb, 0x80);  /* EP0 IN */
 ```
+Problema: la mayoría de kernels bloquean CLEAR_HALT en EP0. Probablemente falle.
 
-### v1.0.35 (futuro) — King path
+**Opción B: Delay largo antes del payload (sin bus reset)**
+No resetear. Esperar ~200ms para que el BootROM termine de procesar el overwrite STALL internamente, luego intentar el DFU_DNLOAD directamente. Si EP0 sigue halted, el DNLOAD toutea como antes — pero al menos el overwrite sobrevive.
 
-Overwrite `(0,0,0,0)` blob grande (sin STALL), payload chunks 0x800 @ 100 ms, `usb_reset` sin finalize DFU — [pgarba/King](https://github.com/pgarba/King) `checkm8()` + `t8010_overwrite`. Solo intentar si v1.0.34 también falla.
+**Opción C: Guardar el overwrite en el handle post-spray (sin bus reset del host)**
+El BootROM procesa el overwrite callback cuando recibe el siguiente DFU transfer. Si mandamos el payload INMEDIATAMENTE sin bus reset, el BootROM puede procesar el overwrite en respuesta al payload SETUP, y el ROP ejecuta durante el DATA phase.
+
+### v1.0.36 (si v1.0.35 falla) — King path completo
+
+King no usa `(0x02, 0x03)` STALL overwrite. Usa un overwrite diferente que no produce STALL, evitando el problema EP0-HALT por completo.
 
