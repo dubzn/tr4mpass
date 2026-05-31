@@ -13,6 +13,7 @@ This document tracks the A10 / CPID `0x8010` checkm8 experiments so we do not re
   - `gaster`: readable C checkm8 implementation, including A10 offsets, ROP, payload layout, and stage flow
   - `ipwndfu`: original checkm8 reference
   - `palera1n`: not useful for low-level comparison; it delegates the exploit to embedded `checkra1n`
+  - External GitHub survey: [`CHECKM8_REFERENCES.md`](CHECKM8_REFERENCES.md)
 
 ## Important Reference Findings
 
@@ -625,19 +626,32 @@ Compared to [0x7ff/gaster](https://github.com/0x7ff/gaster) main (May 2026):
 
 Conclusion: the fork does **not** add a distinct A10 (`0x8010`) patch beyond current upstream gaster. It is still worth matching gaster’s **5 ms** `USB_TIMEOUT` default and running finalize with that timeout (not `5000 ms`).
 
+### v1.0.30 (white + black logs, 2026-05-30)
+
+- `usb_timeout=5 ms` applied on Linux; stages 1–3 OK (UAF guesses 128/64/0).
+- Stage 4: overwrite STALL OK, payload 2016 B → `Operation timed out` at offset 0 (5 ms).
+- Finalize suffix + zlen also timeout at 5 ms; **status polls still used `DFU_TIMEOUT` 5000 ms** → ~15 s extra per attempt (21:46:11 → 21:46:26 white).
+- Serial: clean DFU, no `PWND:[checkm8]` on both devices (3 attempts each).
+
+### v1.0.31 (branch `comp-changes`)
+
+- `dfu_get_status_timeout()` for finalize polls when they run.
+- Skip status polls when suffix or zero-length DNLOAD fails (EP0 wedged after payload).
+- Faster iteration; exploit outcome unchanged vs v1.0.30 until a USB/payload hypothesis lands.
+- Índice de rama y env vars: [`COMP_CHANGES.md`](COMP_CHANGES.md).
+
+### v1.0.32 (branch `comp-changes`)
+
+- `checkm8_payload_timeout_ms()` + env **`CHECKM8_PAYLOAD_TIMEOUT_MS`** (stage 4 payload DNLOAD only).
+- Log al inicio: `usb_timeout=` y `payload_timeout=`; línea extra si el override está activo.
+- **Primer run sugerido:** `CHECKM8_PAYLOAD_TIMEOUT_MS=1000` en Linux (white/black), comparar serial vs v1.0.30.
+
 ## Next Experiment
 
-### v1.0.30
+### v1.0.32 runs (pick one per session, document env in log header)
 
-- Set Linux `USB_ABORT_TIMEOUT_DEFAULT` to **5 ms** (gaster default; override with `USB_TIMEOUT=50` if needed).
-- Re-enable gaster-style finalize for ROP-prefix / A10, using `checkm8_usb_timeout_ms()` so finalize cannot block ~25 s.
-- Log `usb_timeout` at exploit start.
-
-Expected log:
-
-```text
-checkm8_exploit: version 1.0.30
-checkm8_exploit: starting exploit on CPID 0x8010 (usb_timeout=5 ms)
-send_dfu_finalize: ... (fast fail or OK, not 5s gaps)
-```
+1. **`CHECKM8_PAYLOAD_TIMEOUT_MS=1000`** (default usb 5 ms) — retest v1.0.24 corrupted-serial signal.
+2. **`USB_TIMEOUT=50`** (no payload override) — compare UAF `sent=` vs 5 ms baseline.
+3. **King / ipwndfu stage-3** for `0x8010` only — code not in tree yet; see [pgarba/King](https://github.com/pgarba/King).
+4. **gaster #31 spray** — `checkm8_no_leak` length `DFU_MAX_TRANSFER_SZ` for `0x8010` only (future env flag).
 
