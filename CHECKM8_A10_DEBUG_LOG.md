@@ -671,35 +671,66 @@ Conclusion: the fork does **not** add a distinct A10 (`0x8010`) patch beyond cur
 
 **Nota:** esa corrida no probó payload 1000 ms (solo documentación + baseline). Ver **v1.0.33** abajo.
 
-### v1.0.33 — experimento en código (pendiente log en hardware)
+### v1.0.33 — resultado en hardware (white + black, 2026-05-31 ~10:23–10:25)
 
-- **Linux + CPID 0x8010:** `payload_timeout` default **1000 ms** (stage 4 solo); `usb_timeout` sigue 5 ms.
-- Log esperado: `Linux A10 experiment: payload DNLOAD timeout 1000 ms`.
-- Desactivar experimento: `CHECKM8_PAYLOAD_TIMEOUT_MS=0`.
+**Código activo:** `payload_timeout=1000 ms` (stage 4 solo), `usb_timeout=5 ms`. Log confirma `version 1.0.33` y `Linux A10 experiment: payload DNLOAD timeout 1000 ms`.
 
-**Estado logs (`log_white` / `log_black`, actualizados 2026-05-30 ~23:04):** corrida **1.0.32** (`payload_timeout=5 ms`). **1.0.33 no aparece aún** — recompilar en Linux desde `comp-changes` y repetir.
+| Métrica | v1.0.32 (5 ms) | v1.0.33 (1000 ms) |
+|---------|----------------|-------------------|
+| Overwrite | STALL OK (48 B, 0x02/0x03) | STALL OK (48 B, 0x02/0x03) |
+| Payload DNLOAD | timeout @ offset 0, 5 ms | timeout @ offset 0, 1000 ms |
+| Finalize | skip (EP0 wedged) | skip (EP0 wedged) |
+| PWND | No | **No** |
+| Serial | limpio len=98 | limpio len=98 |
+| Addr post-stage4 | igual | igual (no cambia) |
 
-## Síntesis OPUS + Composer (2026-05-30)
+**Observación crítica:** El payload DNLOAD timeutea en offset=0 tanto con 5ms como con 1000ms. Esto descarta la hipótesis de truncado por timeout corto. El BootROM no está aceptando el transfer DATA stage en absoluto — EP0 sigue halted después del overwrite STALL sin importar el timeout del host.
 
-Ver tabla en [`COMP_CHANGES.md`](COMP_CHANGES.md) (*Síntesis OPUS vs Composer*).
+**Comportamiento del addr USB:** El addr NO cambia después del stage 4 (100→100→101, no hay salto adicional post-payload). El shellcode no ejecuta.
 
-**Resumen:** Opus acertó sobre v1.0.28 (overwrite/payload USB incorrectos) — **ya corregido** en v1.0.29+. Composer implementó finalize rápido (v1.0.31, validado en logs) y payload 1000 ms auto (v1.0.33, sin corrida). **Sin PWND.** Research Composer señala **King** (3 stages, overwrite grande, sin finalize DFU) como siguiente cambio de código, no más parches al path gaster ya alineado.
+## Síntesis OPUS + Composer (2026-05-30/31)
+
+**Resumen actual:** Estamos perfectamente alineados con `gaster` main en stage 4:
+- overwrite `(0x02, 0x03, 0, 0x80)` 48 bytes ✅
+- `io_buffer=0, io_len=0, callback=nop_gadget, next=insecure_memory_base` ✅
+- sin pre-payload DNLOAD ✅
+- `exec_addr=0x1820B0610`, `patch=0x1020074AC` ✅
+
+Sin embargo el payload DNLOAD sigue timuteando en offset=0 con cualquier timeout. **El overwrite STALL deja EP0 halted permanentemente** y el siguiente DFU_DNLOAD no alcanza el BootROM.
+
+**Hipótesis raíz más probable:** On Linux/xHCI, el host EP0 queda en estado halted tras el STALL del overwrite. `libusb_control_transfer` no puede enviar el SETUP packet del DFU_DNLOAD porque el kernel bloquea nuevos transfers hacia un endpoint halted. El BootROM nunca ve los bytes del payload.
+
+**La solución real** requiere o bien:
+1. Un USB reset entre el overwrite STALL y el payload send (que es lo que hace gaster implícitamente en macOS via IOKit — IOKit resetea EP0 automáticamente tras STALL)
+2. Usar la implementación de King (`(0,0,0,0)` + blob diferente) que puede evitar el STALL en primer lugar
+
+## Current Hypothesis (post v1.0.33)
+
+Linux `libusb` no hace CLEAR_FEATURE(ENDPOINT_HALT) automáticamente en EP0 después de un STALL, a diferencia de IOKit en macOS. Esto deja EP0 halted, causando que todos los DFU_DNLOAD subsiguientes fallen inmediatamente con timeout (el kernel rechaza el submit).
+
+Solución candidata: llamar `libusb_reset_device()` **después** del overwrite STALL y **antes** del payload send. Esto envía un USB bus reset que limpia el estado halted del EP0 en el dispositivo, permitiendo que el próximo DFU_DNLOAD llegue al BootROM.
+
+**Riesgo:** el bus reset puede disturbar el estado de la heap si el BootROM procesa el reset antes de que el callback de la overwrite sea invocado. Pero dado que el STALL ya confirmó que el overwrite llegó, el callback ya está en memoria — solo necesitamos que el BootROM lo ejecute.
 
 ## Next Experiment
 
-### 1 — Correr v1.0.33 (prioridad)
+### v1.0.34 — USB reset entre overwrite STALL y payload send
 
-```bash
-git checkout comp-changes && make && sudo ./tr4mpass …
+- Después del overwrite STALL (confirmado en logs), llamar `libusb_reset_device()`.
+- Esperar re-enumeración del device (polling por addr nuevo).
+- Enviar el payload DFU_DNLOAD en el handle fresco.
+- **No** usar pre-payload DNLOAD de 64 bytes (no está en gaster main).
+- **Señal esperada:** addr USB cambia entre overwrite y payload send, y/o el payload DNLOAD devuelve algo distinto de timeout inmediato.
+
+```text
+log esperado:
+send_overwrite: STALL received
+[stage4] USB reset to clear EP0 after overwrite STALL...
+DFU device found (bus 3, addr N+1)    ← addr NUEVO
+send_payload_chunks: offset=0 ret=2016 ← o ret diferente de -7
 ```
 
-Buscar: `version 1.0.33`, `payload_timeout=1000 ms`, `2016/2016 bytes sent` o serial distinto.
+### v1.0.35 (futuro) — King path
 
-### 2 — Control gaster en mismo Linux
-
-Mismo cable/puerto: `./gaster pwn` → ¿`PWND:[checkm8]`?
-
-### 3 — v1.0.34 King path (implementación futura)
-
-Overwrite `(0,0,0,0)` blob grande, payload chunks 0x800 @ 100 ms, `usb_reset` sin finalize DFU — [pgarba/King](https://github.com/pgarba/King) `checkm8()` + `t8010_overwrite`.
+Overwrite `(0,0,0,0)` blob grande (sin STALL), payload chunks 0x800 @ 100 ms, `usb_reset` sin finalize DFU — [pgarba/King](https://github.com/pgarba/King) `checkm8()` + `t8010_overwrite`. Solo intentar si v1.0.34 también falla.
 
