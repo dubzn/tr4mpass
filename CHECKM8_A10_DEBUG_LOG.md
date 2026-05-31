@@ -566,12 +566,45 @@ The STALL we logged as "overwrite landed in freed io_buffer" was therefore very 
 - Restore gaster-style DFU finalize for ROP-prefix chips.
 - Drop the 1000 ms payload timeout diagnostic; use normal `usb_timeout` again.
 
-Expected log signal:
+### v1.0.28
+
+- Result from both logs: no `PWND`. Regressed vs earlier attempts:
+  - overwrite `(0,0,0,0)` 64 bytes → STALL
+  - pre-payload DNLOAD → immediate PIPE/STALL
+  - payload DNLOAD → timeout at offset 0
+  - `send_dfu_finalize` → ~25s of timeouts per attempt (suffix, zero-length, 3 status polls)
+  - clean DFU serial on every verification
+
+## Opus analysis review (`OPUS_ANALYSIS.txt`)
+
+Cross-checked against **current** [gaster main](https://github.com/0x7ff/gaster/blob/main/gaster.c) (not an older snapshot):
+
+| Claim in Opus TXT | Verdict |
+|-------------------|---------|
+| Overwrite uses `(2, 3, 0, 0x80)` | **Correct** — `gaster.c` line ~1211 |
+| `checkm8_overwrite_t` is 48 bytes (callback only) | **Correct** — no `heap_pad` in current main |
+| No pre-payload `EP0_MAX_PACKET_SZ` DNLOAD before payload | **Correct** — payload loop follows overwrite STALL directly |
+| v1.0.28 `(0,0,0,0)` + 64 bytes + pre-DNLOAD was wrong | **Correct** — matched an outdated gaster excerpt |
+| EP0 wedged after overwrite STALL explains follow-on PIPE/timeouts | **Plausible** — matches v1.0.28 log pattern |
+| Separate 2048-byte “leading block” vs our 2016-byte send | **Misleading** — gaster `calloc(DFU_MAX_TRANSFER_SZ + …)` but still DNLOADs `data_sz` bytes in chunks; our `data_sz=2016` layout matches |
+
+`v1.0.28` was based on a wrong gaster revision (overwrite `(0,0,0,0)` and heap pads from an older fork/commit dump).
+
+## Next Experiment
+
+### v1.0.29
+
+- Revert stage 4 USB path to **current gaster main**:
+  - overwrite `(0x02, 0x03, 0, 0x80)`, **48** bytes
+  - no pre-payload DNLOAD
+  - skip ROP-prefix finalize on Linux (v1.0.28 finalize wedge)
+- Keep full notA9 payload assembly (`exec_addr=0x1820B0610`, etc.)
+
+Expected log:
 
 ```text
-checkm8_exploit: version 1.0.28
-send_overwrite: sending 64 bytes (bmReqType=0x00, bReq=0x00, wValue=0, wIndex=0)
-pre-payload DNLOAD (64 bytes)
-send_dfu_finalize: suffix send ret=...
+checkm8_exploit: version 1.0.29
+send_overwrite: sending 48 bytes (bmReqType=0x02, bReq=0x03, wIndex=0x80)
+skipping DFU finalize (ROP-prefix / Linux wedge)
 ```
 

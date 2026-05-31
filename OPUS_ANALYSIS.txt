@@ -1,0 +1,114 @@
+Excelente — el debug log es extremadamente valioso. Han pasado 5 días y se han probado 28 versiones. Déjame estudiar el patrón completo y el código actual antes de proponer algo.
+
+La clave del debug log: la línea 541-556 del debug doc identifica que el overwrite se enviaba con bmReqType=0x02, bReq=0x03 (SET_FEATURE HALT) — totalmente incorrecto. v1.0.28 lo corrigió a (0x00, 0x00, 0, 0). Pero la pregunta es: ¿gaster realmente usa (0x00, 0x00, 0, 0) para el overwrite?
+
+Gaster source analyzer
+Invoked research subagent
+While that research runs, let me look at the current state of the code to understand what v1.0.28 changed:
+
+Now let me look at the critical insight in the debug log. The pre-payload DNLOAD also gets STALL (line 81/83: pre-payload DNLOAD (64 bytes) ret=-9 (Pipe error)). This means EP0 is halted after the overwrite STALL, and ALL subsequent transfers on the same handle also STALL. The 2016-byte payload DNLOAD then times out because EP0 is halted.
+
+Let me look at gaster source directly:
+
+The markdown conversion might have distorted things. Let me search more broadly:
+
+The file got truncated at 398 lines. This is a huge file. I need the stage_patch part specifically:
+
+Let me download the raw file directly:
+
+THIS IS IT. Line 853 is the critical discovery. Let me read that section carefully:
+
+THIS IS THE BREAKTHROUGH. Line 1211 is the answer to everything:
+
+c
+
+
+send_usb_control_request(handle, 2, 3, 0, 0x80, overwrite, overwrite_sz, &transfer_ret)
+Gaster sends the overwrite with bmRequestType=2, bRequest=3, wValue=0, wIndex=0x80 — NOT (0, 0, 0, 0) as we changed it to in v1.0.28!
+
+The debug log at line 541-544 was WRONG when it said:
+
+gaster sends the overwrite with bmReqType=0x00, bReq=0x00, wValue=0, wIndex=0
+
+The original code had it RIGHT with (0x02, 0x03, 0, 0x80)! We "fixed" it to the wrong values.
+
+And critical finding #2: gaster's checkm8_overwrite_t does NOT have heap_pad_0/heap_pad_1. Look at line 119-121:
+
+c
+
+
+typedef struct {
+    dfu_callback_t callback;
+} checkm8_overwrite_t;
+It's just the dfu_callback_t — 48 bytes, NOT 64. The debug log at line 555 was wrong again when it said "missing heap_pad_0/heap_pad_1".
+
+And finding #3 (line 1073): For A10 (0x8010), gaster allocates DFU_MAX_TRANSFER_SZ + payload_sz + sizeof(notA9) + ... — meaning the first DFU_MAX_TRANSFER_SZ (0x800 = 2048) bytes are the ROP/TTBR0 data, and the payload comes AFTER that. Our 2016-byte payload starts from offset 0 with the ROP prefix, but gaster has a separate 2048-byte leading block!
+
+And finding #4 (line 1215): gaster sends payload with transfer_ret = NULL, meaning it ignores all errors.
+
+And finding #5: There is NO "pre-payload DNLOAD" of 64 bytes. That was also wrong in the debug log.
+
+Let me verify the exact data layout. Let me look at the overwrite size sent:
+
+The conversation was compacted while generating this response.
+Now I can see the full picture. Let me verify the data layout for A10:
+
+Now I can map the exact gaster data layout for A10 (0x8010):
+
+data buffer = DFU_MAX_TRANSFER_SZ + payload_sz + sizeof(notA9) + payload_handle_checkm8_request_sz + sizeof(handle_checkm8_request)
+data[0x000..0x3FF]: zeros (below ttbr0_vrom_off)
+data[0x400..0x40F]: TTBR0 VROM entries (2 x uint64_t)
+data[0x410..0x5FF]: zeros (between VROM and SRAM)
+data[0x600..0x60F]: TTBR0 SRAM entries (2 x uint64_t)
+data[0x028..0x610]: ROP callbacks (usb_rop_callbacks writes at offsetof(dfu_callback_t, callback) = 0x28)
+data_sz after the above = ttbr0_sram_off + 2 * sizeof(uint64_t) = 0x600 + 16 = 0x610
+Then: payload_notA9_bin shellcode (main code)
+Then: notA9 config struct
+Then: payload_handle_checkm8_request_bin handler code
+Then: handle_checkm8_request config struct
+Wait — the data starts at 0 and the TTBR0 is at ttbr0_vrom_off=0x400 — so there's 0x400 bytes before it. The ROP callbacks start at offsetof(dfu_callback_t, callback) = 0x28. So the data is:
+
+
+
+[0x000..0x027] = zeros
+[0x028..???  ] = ROP callbacks
+[0x400..0x40F] = TTBR0 VROM 
+[0x600..0x60F] = TTBR0 SRAM
+data_sz = 0x610
+[0x610..0x610+payload_sz] = shellcode
+[...+sizeof(notA9)]       = config  
+[...+handler_sz]          = handler code
+[...+sizeof(handler_cfg)] = handler config
+The FIRST DFU_DNLOAD sends data[0..0x7FF] (2048 bytes = first DFU_MAX_TRANSFER_SZ) — this contains the ROP chain + TTBR0 entries. The second chunk sends the remaining data from 0x800 onward.
+
+Our code sends the entire payload in ONE chunk starting from 0, with the ROP prefix in the first 0x610 bytes and the shellcode after. That should be correct — let me verify our payload assembly matches.
+
+Now I have the full picture. Let me check the checkm8_overwrite_t struct:
+
+OK, now I have the full diagnosis. Let me create a plan with all the bugs found:
+
+Gaster (line 119-121):
+
+c
+
+
+typedef struct {
+    dfu_callback_t callback;   // 48 bytes
+} checkm8_overwrite_t;         // = 48 bytes total
+Our code (line 123-127):
+
+c
+
+
+typedef struct {
+    dfu_callback_t callback;   // 48 bytes
+    uint64_t       heap_pad_0; // +8 = 56
+    uint64_t       heap_pad_1; // +8 = 64 bytes total
+} checkm8_overwrite_t;
+Bug 1: Our overwrite is 64 bytes, gaster's is 48 bytes. The extra 16 bytes write past the dfu_callback_t into whatever follows in the heap — potentially corrupting adjacent data structures.
+
+Bug 2: The overwrite USB request. Gaster uses (2, 3, 0, 0x80) (line 1211). We changed to (0, 0, 0, 0) in v1.0.28. THE ORIGINAL WAS CORRECT.
+
+Bug 3: No pre-payload DNLOAD. Gaster goes directly from overwrite STALL to payload DFU_DNLOAD. No 64-byte pre-payload transfer.
+
+Now let me fix all three bugs:
