@@ -785,9 +785,149 @@ Esto obliga al driver del host (xHCI/usbcore) a reinicializar el anillo de trans
 
 ---
 
-## Next Experiments (si v1.0.36 falla)
+## v1.0.36 — Resultado en hardware (white + black, 2026-05-31 ~13:22)
 
-### v1.0.37 — King path completo
-King no usa `(0x02, 0x03)` STALL overwrite. Usa un overwrite diferente que no produce STALL, evitando el problema EP0-HALT por completo.
+**❌ Fallido — EP0 HALT NO fue eliminado por el reopen del handle.**
 
+El concepto de v1.0.36 era: cerrar y reabrir el handle de libusb sobre el mismo `libusb_device` sin enviar señalización USB al dispositivo, forzando al kernel a reinicializar el estado host-side de EP0.
+
+Lo que muestran los logs:
+
+```text
+checkm8: [stage4] v1.0.36: reopen handle on same addr to clear host-side EP0 HALT...
+checkm8: [stage4] v1.0.36: handle reopened (same device, no bus reset) -- overwrite preserved
+checkm8: [stage4] send_payload_chunks: sending 2016 bytes total (timeout=1000 ms)
+checkm8: [stage4] send_payload_chunks: offset=0 ret=-7 (Operation timed out)
+```
+
+El payload `DFU_DNLOAD` volvió a timeout inmediato (igual que antes de v1.0.34). El reopen de handle limpia el estado userspace de libusb pero **el kernel usbcore no reinicializa el transfer ring de EP0** — el estado HALT persiste en el driver xHCI. No se entregaron bytes.
+
+Conclusión: para limpiar el EP0 HALT sin bus reset físico se necesita o bien una ioctl especial al kernel, o **evitar el STALL en primer lugar**.
+
+## Current Hypothesis (post v1.0.36)
+
+**El problema raíz es la elección del request para el overwrite.**
+
+`gaster` usa `(0x02, 0x03, 0, 0x80)` → SET_FEATURE(ENDPOINT_HALT). El BootROM responde STALL porque SET_FEATURE en EP0-IN no es válido en DFU mode. Ese STALL es lo que deja EP0 halted en el host (Linux xHCI no hace CLEAR automáticamente).
+
+La solución es enviar el overwrite usando el **mismo tipo de request que el pad de stage 2**: `(0x00, 0x00, 0, 0)` — control OUT genérico hacia el BootROM. Este request:
+
+- Escribe los bytes del overwrite en el freed io_buffer (mismo mecanismo que el pad de stage 2)
+- **No genera STALL** — el BootROM lo acepta como un OUT data stage genérico
+- EP0 queda listo para el siguiente `DFU_DNLOAD` (payload) sin necesidad de ningún tipo de reset
+
+Este es el "King path".
+
+## Next Experiment
+
+### v1.0.37 — King path: overwrite via `(0x00, 0x00, 0, 0)` sin STALL
+
+**Código:** `checkm8_patch.c` compilado con `-DCHECKM8_KING_PATH`
+
+- `send_overwrite()` usa `usb_ctrl_transfer(usb, 0x00, 0x00, 0, 0, blob, 48, USB_TIMEOUT_MS)`
+- Si retorna `LIBUSB_ERROR_PIPE` (STALL inesperado): abort (King path inefectivo)
+- Si retorna ≥ 0 o TIMEOUT: ACK → EP0 listo → enviar payload inmediatamente
+- Sin handle reopen, sin bus reset
+
+**Build:**
+```bash
+make clean && make EXTRA_CFLAGS=-DCHECKM8_KING_PATH
+```
+
+**Señales esperadas en el log:**
+```text
+send_overwrite [KING PATH]: sending 48 bytes via (0x00,0x00,0,0) -- no STALL expected
+send_overwrite [KING PATH]: ACK -- overwrite landed without STALL, EP0 ready for payload
+v1.0.37 [KING PATH]: no handle reopen needed -- EP0 not halted
+send_payload_chunks: sending 2016 bytes total (timeout=1000 ms)
+send_payload_chunks: offset=0 ret=2016   <-- payload entregado
+```
+
+**Posibles resultados:**
+
+1. **PWND** — King path correcto; shellcode ejecuta y parchea serial.
+2. **Payload entregado pero sin PWND** — mismo que v1.0.34; el overwrite llegó pero el ROP/shellcode falla.
+3. **Overwrite STALL con King path** — el BootROM rechaza el `(0,0,0)` request en este estado DFU (inesperado).
+4. **Overwrite ACK pero payload timeout** — el `(0,0,0)` no escribe al freed io_buffer (geometry incorrecta).
+
+---
+
+## v1.0.37 — Resultado en hardware (white, 2026-05-31 ~20:44)
+
+**❌ Fallido — Resultado 3: King path `(0x00, 0x00, 0, 0)` también STALLa EP0.**
+
+Líneas clave del log:
+
+```text
+send_overwrite [KING PATH]: sending 48 bytes via (0x00,0x00,0,0) -- no STALL expected
+send_overwrite [KING PATH]: ret=-9 (Pipe error)
+unexpected STALL -- EP0 will be halted (King path ineffective)
+```
+
+**Conclusión crítica: el STALL no depende del tipo de request.**
+
+El STALL viene del BootROM procesando la escritura al freed io_buffer. El mismo mecanismo que produce el STALL en stage 2 con `(0x00, 0x00)` aplica también en stage 4. El tipo de request es irrelevante — lo que causa el STALL es la escritura a la heap corrupta que hace que el firmware quede en un estado que fuerza STALL de EP0.
+
+**Nueva señal importante: serial corrupto después del intento 1:**
+
+```text
+checkm8_verify_pwned: serial = "C@??X" (len=6)
+checkm8_verify_pwned: serial hex = [43 40 15 A2 E2 58]
+```
+
+Esto es idéntico a la señal de v1.0.24: `0x43` = 'C' (primer byte de "CPID:..."), resto garbage. El overwrite `(0x00, 0x00)` **sí está llegando al dispositivo y alterando memoria**, pero sin payload el ROP callback nunca ejecuta. El STALL deja EP0 bloqueado antes de que el payload llegue.
+
+**Nota sobre el flujo de intentos:**
+- Intento 1: STALL → device NO reset automáticamente (addr 11 → 11) → `set configuration failed, errno=110 (ETIMEDOUT)` → device wedged 5 segundos
+- Intento 2: falla en stage 1 (EP0 todavía wedged del intento anterior)
+- Intento 3: addr 12 (device finalmente reseteo) → mismo resultado STALL
+
+## Current Hypothesis (post v1.0.37)
+
+**El STALL de EP0 en Linux es inherente al mecanismo de overwrite del checkm8.** No es posible evitarlo cambiando el tipo de request. La diferencia con macOS es que IOKit envía automáticamente `CLEAR_FEATURE(ENDPOINT_HALT)` en EP0 después de un STALL, restaurando EP0 de forma transparente. Linux/libusb no hace esto.
+
+Intentos previos de limpiar EP0 sin bus reset:
+- `libusb_clear_halt(EP0)` → `LIBUSB_ERROR_NOT_FOUND` (v1.0.35) — libusb rechaza EP0 en su API de alto nivel
+- Reopen handle → no limpia el transfer ring (v1.0.36)
+- King path `(0x00, 0x00)` → también STALLa (v1.0.37)
+
+**Opción no intentada:** Acceso directo al kernel vía ioctl `USBDEVFS_RESETEP` sobre el file descriptor de usbfs. Este ioctl resetea el estado del endpoint en el driver xHCI **sin enviar nada al dispositivo** — limpia el toggle bits y el flag HALT interno del driver. A diferencia de `libusb_clear_halt`, no intenta enviar `CLEAR_FEATURE` al dispositivo y no está bloqueado para EP0 en el kernel level.
+
+## Next Experiment
+
+### v1.0.38 — `USBDEVFS_RESETEP` directo sobre EP0 vía usbfs ioctl
+
+**Concepto:**
+
+Abrir `/dev/bus/usb/BUS/ADDR` directamente y llamar:
+```c
+int fd = open("/dev/bus/usb/003/011", O_RDWR);
+unsigned int ep_out = 0x00;   // EP0 OUT
+unsigned int ep_in  = 0x80;   // EP0 IN
+ioctl(fd, USBDEVFS_RESETEP, &ep_out);
+ioctl(fd, USBDEVFS_RESETEP, &ep_in);
+close(fd);
+```
+
+`USBDEVFS_RESETEP` reinicia el endpoint en el kernel xHCI driver: limpia el halt flag interno y resetea el data toggle — sin enviar ningún packet USB al dispositivo. El BootROM nunca ve esta operación.
+
+**Por qué puede funcionar:**
+- El HALT de EP0 es un estado **host-side** en el transfer ring del kernel
+- `libusb_clear_halt` falla porque intenta enviar `CLEAR_FEATURE(ENDPOINT_HALT)` al dispositivo (inválido para EP0) y su código de alto nivel lo rechaza
+- `USBDEVFS_RESETEP` opera solo en el kernel driver, no envía nada al bus
+
+**Build:** binario gaster path (sin `CHECKM8_KING_PATH`), con la limpieza de EP0 vía `USBDEVFS_RESETEP` insertada después del overwrite STALL y antes del payload.
+
+**Señales esperadas:**
+```text
+send_overwrite: STALL received (expected) -- overwrite landed in freed io_buffer
+v1.0.38: USBDEVFS_RESETEP EP0 OUT ret=0
+v1.0.38: USBDEVFS_RESETEP EP0 IN  ret=0
+send_payload_chunks: sending 2016 bytes total (timeout=1000 ms)
+send_payload_chunks: offset=0 ret=2016    <-- payload entregado sin bus reset
+```
+
+**Si `USBDEVFS_RESETEP` falla con `EINVAL`/`ENODEV`:** el kernel xHCI rechaza reset de EP0 también. En ese caso, la siguiente opción es `USBDEVFS_CLEAR_HALT` con el ioctl directo (bypass completo de libusb).
+
+**Resultado:** _pendiente de implementación y test en hardware_
 

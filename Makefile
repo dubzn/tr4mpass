@@ -1,5 +1,7 @@
 CC       = cc
-CFLAGS   = -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2
+CFLAGS      = -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2
+# Append optional experiment flags, e.g.: make EXTRA_CFLAGS=-DCHECKM8_KING_PATH
+CFLAGS     += $(EXTRA_CFLAGS)
 LDFLAGS  =
 
 # Library discovery via pkg-config (warn but do not fail if missing)
