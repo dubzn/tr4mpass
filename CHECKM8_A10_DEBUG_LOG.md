@@ -752,26 +752,42 @@ La plomería USB está resuelta. El payload se entrega. El problema está en el 
 
 **Observación:** En el log black, el addr post-stage4 es **el mismo** que el addr con el que entramos al stage 4 (105→105, 106→106, 107→107). Esto es consistente con la hipótesis 1: el bus reset destruye el overwrite antes del payload.
 
-## Next Experiments
+### v1.0.35 — resultado en hardware (white + black, 2026-05-31 ~13:11)
 
-### v1.0.35 — Eliminar el bus reset post-overwrite, usar CLEAR_HALT en su lugar
+**❌ Fallido — EP0 CLEAR_HALT bloqueado por el Host Controller Driver.**
 
-En lugar de `libusb_reset_device()` (que manda señal USB bus reset al BootROM, potencialmente destruyendo el heap), intentar limpiar el HALT de EP0 sin un bus reset completo:
+- `CLEAR_HALT EP0-OUT` y `CLEAR_HALT EP0-IN` devolvieron `ret=-5 (Entity not found / LIBUSB_ERROR_NOT_FOUND)`.
+- El driver xHCI/usbcore no registra a EP0 en su mapa de endpoints halted ordinarios o bloquea operaciones directas de clearing halt en él.
+- El EP0 host-side continuó halted, y el payload `send_payload_chunks: offset=0` falló por timeout (`Operation timed out`).
 
-**Opción A: `usb_clear_halt` en EP0 (si el kernel lo permite)**
-```c
-libusb_clear_halt(usb, 0x00);  /* EP0 OUT */
-libusb_clear_halt(usb, 0x80);  /* EP0 IN */
-```
-Problema: la mayoría de kernels bloquean CLEAR_HALT en EP0. Probablemente falle.
+---
 
-**Opción B: Delay largo antes del payload (sin bus reset)**
-No resetear. Esperar ~200ms para que el BootROM termine de procesar el overwrite STALL internamente, luego intentar el DFU_DNLOAD directamente. Si EP0 sigue halted, el DNLOAD toutea como antes — pero al menos el overwrite sobrevive.
+### v1.0.36 — Reabrir handle en la misma dirección USB sin Bus Reset
 
-**Opción C: Guardar el overwrite en el handle post-spray (sin bus reset del host)**
-El BootROM procesa el overwrite callback cuando recibe el siguiente DFU transfer. Si mandamos el payload INMEDIATAMENTE sin bus reset, el BootROM puede procesar el overwrite en respuesta al payload SETUP, y el ROP ejecuta durante el DATA phase.
+Implementado en `checkm8_patch.c` y compilado exitosamente.
 
-### v1.0.36 (si v1.0.35 falla) — King path completo
+**Concepto:**
+El bloqueo de EP0 tras el STALL es puramente en el **lado del host** (un estado lógico que el controlador de host xHCI y el kernel mantienen al recibir un STALL en un transfer). El hardware físico del dispositivo no mantiene a EP0 halted (los STALLs en EP0 son transitorios para indicar que una petición no es soportada). 
 
+En lugar de:
+- Un bus reset físico (`libusb_reset_device()`) que destruye el heap state al disparar `dfu_handle_bus_reset()` en el BootROM.
+- `libusb_clear_halt` que es rechazado por el kernel en EP0.
+
+Hacemos un **Reopen del handle local**:
+1. Guardamos la referencia de `libusb_device` mediante `libusb_ref_device()`.
+2. Liberamos la interfaz y cerramos el handle de libusb `usb` viejo.
+3. Reabrimos la comunicación usando `libusb_open()` con el mismo puntero `dev`.
+4. Re-clamamos la interfaz 0.
+5. Liberamos la referencia del dispositivo con `libusb_unref_device()`.
+
+**Propósito:**
+Esto obliga al driver del host (xHCI/usbcore) a reinicializar el anillo de transferencia (transfer ring) de EP0 y limpiar el estado halt lógico local, **sin enviar ningún tipo de señalización de reset por el bus USB al dispositivo**. El dispositivo retiene la heap intacta en su estado actual, con la overwrite callback intacta, y EP0 host-side queda perfectamente listo para transferir los 2016 bytes del payload.
+
+---
+
+## Next Experiments (si v1.0.36 falla)
+
+### v1.0.37 — King path completo
 King no usa `(0x02, 0x03)` STALL overwrite. Usa un overwrite diferente que no produce STALL, evitando el problema EP0-HALT por completo.
+
 
