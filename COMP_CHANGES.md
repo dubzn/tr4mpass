@@ -2,7 +2,7 @@
 
 Rama de trabajo para iterar el exploit checkm8 en **iPhone 7-class / iBoot-2696** sin mezclar con `main` hasta validar en hardware.
 
-**Versión actual del exploit:** `1.0.32` (`CHECKM8_EXPLOIT_VERSION` en logs).
+**Versión actual del exploit:** `1.0.33` (`CHECKM8_EXPLOIT_VERSION` en logs).
 
 **Criterio de éxito:** serial USB con `PWND:[checkm8]` en DFU.
 
@@ -19,8 +19,11 @@ Rama de trabajo para iterar el exploit checkm8 en **iPhone 7-class / iBoot-2696*
 | **1.0.30** | Linux `usb_timeout` default **5 ms** (gaster); finalize suffix/zlen con `checkm8_usb_timeout_ms()` | Alinear timing de abort UAF con gaster |
 | **1.0.31** | `dfu_get_status_timeout()`; omitir 3× GETSTATUS si fallan suffix o DNLOAD 0-len | v1.0.30 perdía ~15 s/intento en polls con `DFU_TIMEOUT=5000` |
 | **1.0.32** | `CHECKM8_PAYLOAD_TIMEOUT_MS` para stage 4 payload solo | Probar timeout largo (p. ej. 1000 ms) sin tocar stage 2 |
+| **1.0.33** | En **Linux + CPID 0x8010**, payload default **1000 ms** si el env no está puesto | El experimento corre solo con `make` + run; no hace falta `export` |
 
 **Estado conocido (logs v1.0.30, white + black):** stages 1–3 OK; overwrite STALL OK; payload 2016 B → timeout; serial limpio sin PWND.
+
+**Última corrida (v1.0.32, 2026-05-30):** baseline `payload_timeout=5 ms` (sin env override). Finalize ~1 s/intento (fix OK). Sin PWND. Falta correr con `CHECKM8_PAYLOAD_TIMEOUT_MS=1000` — ver [`CHECKM8_A10_DEBUG_LOG.md`](CHECKM8_A10_DEBUG_LOG.md) sección *v1.0.32 — prueba en hardware*.
 
 ---
 
@@ -30,7 +33,7 @@ Rama de trabajo para iterar el exploit checkm8 en **iPhone 7-class / iBoot-2696*
 |----------|---------|-----|
 | `USB_TIMEOUT` | `5` | Timeout global gaster (UAF abort, overwrite, finalize DNLOAD, payload si no hay override) |
 | `USB_ABORT_TIMEOUT_MIN` | `0` | Piso del barrido de abort en stage 2 |
-| `CHECKM8_PAYLOAD_TIMEOUT_MS` | *(igual que `USB_TIMEOUT`)* | Solo el `DFU_DNLOAD` del payload en stage 4 |
+| `CHECKM8_PAYLOAD_TIMEOUT_MS` | Linux 8010: **1000**; resto: igual que `USB_TIMEOUT` | Solo stage 4 payload. `=0` → forzar gaster (5 ms con default usb) |
 
 Ejemplos:
 

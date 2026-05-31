@@ -640,18 +640,60 @@ Conclusion: the fork does **not** add a distinct A10 (`0x8010`) patch beyond cur
 - Faster iteration; exploit outcome unchanged vs v1.0.30 until a USB/payload hypothesis lands.
 - Índice de rama y env vars: [`COMP_CHANGES.md`](COMP_CHANGES.md).
 
-### v1.0.32 (branch `comp-changes`)
+### v1.0.32 (branch `comp-changes`) — código
 
 - `checkm8_payload_timeout_ms()` + env **`CHECKM8_PAYLOAD_TIMEOUT_MS`** (stage 4 payload DNLOAD only).
 - Log al inicio: `usb_timeout=` y `payload_timeout=`; línea extra si el override está activo.
-- **Primer run sugerido:** `CHECKM8_PAYLOAD_TIMEOUT_MS=1000` en Linux (white/black), comparar serial vs v1.0.30.
+
+### v1.0.32 — prueba en hardware (white + black, 2026-05-30 ~23:01–23:03)
+
+**Entorno:** sin `CHECKM8_PAYLOAD_TIMEOUT_MS` (baseline gaster: `usb_timeout=5`, `payload_timeout=5`). Rama `comp-changes`, binario **1.0.32**. Logs: `src/log_white.txt`, `src/log_black.txt`.
+
+| Métrica | v1.0.30 | v1.0.32 (esta corrida) |
+|---------|---------|-------------------------|
+| Tiempo stage 4 → verify (intento 1) | ~15 s (status1–3 @ 5 s) | **~1 s** (23:01:58→23:01:59 white) |
+| `send_dfu_finalize` | `status1/2/3 failed` cada ~5 s | `skipping status polls (finalize DNLOAD failed)` |
+| PWND | No | **No** |
+| Serial | limpio len=98 | limpio len=98 (sin corrupción) |
+| Payload DNLOAD | timeout @ offset 0, 5 ms | igual |
+| UAF (white) | 128 / 64 / 0 | 128 / 64 / 0 |
+
+**Stages 1–3:** OK en ambos dispositivos (spray path B, 5 holes). White: tras reset post-spray, libusb `errno=2` un instante y re-open en addr+1 (84→85); exploit siguió.
+
+**Stage 4 (igual que v1.0.30 en outcome):** overwrite STALL OK → payload 2016 B → `Operation timed out` @ offset 0 → suffix/zlen timeout → skip status polls → bus reset 250 ms → serial DFU normal.
+
+**Progreso real:**
+
+- **Sí (herramienta / iteración):** el fix v1.0.31 de finalize funciona; ya no se pierden ~15 s por intento. El log confirma `payload_timeout=5 ms` en la línea de arranque.
+- **No (exploit):** aún no hay `PWND:[checkm8]`. No se ejecutó el experimento de payload largo (`CHECKM8_PAYLOAD_TIMEOUT_MS=1000`); esta corrida valida solo baseline 5 ms + finalize rápido.
+
+**Interpretación:** el timeout inmediato en payload + EP0 colgado (finalize imposible) sugiere que el dispositivo sale del estado DFU “habitual” tras el overwrite/payload, pero el parche del serial no ocurre — coherente con ROP que no completa, payload truncado por timeout de 5 ms, o heap incorrecto.
+
+**Nota:** esa corrida no probó payload 1000 ms (solo documentación + baseline). Ver **v1.0.33** abajo.
+
+### v1.0.33 — experimento en código (pendiente log)
+
+- **Linux + CPID 0x8010:** `payload_timeout` default **1000 ms** (stage 4 solo); `usb_timeout` sigue 5 ms.
+- Log esperado: `Linux A10 experiment: payload DNLOAD timeout 1000 ms`.
+- Desactivar experimento: `CHECKM8_PAYLOAD_TIMEOUT_MS=0`.
+- Override manual: `CHECKM8_PAYLOAD_TIMEOUT_MS=<ms>`.
+
+**Señales a buscar en el próximo run:** `send_payload_chunks: done -- 2016/2016 bytes sent` vs timeout; serial corrupto (v1.0.24) o `PWND:[checkm8]`.
 
 ## Next Experiment
 
-### v1.0.32 runs (pick one per session, document env in log header)
+### Correr v1.0.33 en Linux (rama `comp-changes`)
 
-1. **`CHECKM8_PAYLOAD_TIMEOUT_MS=1000`** (default usb 5 ms) — retest v1.0.24 corrupted-serial signal.
-2. **`USB_TIMEOUT=50`** (no payload override) — compare UAF `sent=` vs 5 ms baseline.
-3. **King / ipwndfu stage-3** for `0x8010` only — code not in tree yet; see [pgarba/King](https://github.com/pgarba/King).
-4. **gaster #31 spray** — `checkm8_no_leak` length `DFU_MAX_TRANSFER_SZ` for `0x8010` only (future env flag).
+```bash
+make && sudo ./tr4mpass …
+# debe decir version 1.0.33 y payload_timeout=1000 ms sin export
+```
+
+Baseline gaster otra vez: `CHECKM8_PAYLOAD_TIMEOUT_MS=0`.
+
+### Después (una variable por sesión)
+
+1. **`USB_TIMEOUT=50`** (sin payload override) — UAF `sent=` vs baseline.
+2. **King / ipwndfu stage-3** for `0x8010` — código pendiente; [pgarba/King](https://github.com/pgarba/King).
+3. **gaster #31 spray** — `checkm8_no_leak` con `DFU_MAX_TRANSFER_SZ` solo en 8010 (flag futuro).
 
