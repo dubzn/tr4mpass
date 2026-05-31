@@ -600,11 +600,44 @@ Cross-checked against **current** [gaster main](https://github.com/0x7ff/gaster/
   - skip ROP-prefix finalize on Linux (v1.0.28 finalize wedge)
 - Keep full notA9 payload assembly (`exec_addr=0x1820B0610`, etc.)
 
+### v1.0.29
+
+- Result from both logs: no `PWND`. Stage 4 USB path matches current gaster main again:
+  - overwrite `(0x02, 0x03, 0x80)` 48 bytes → STALL
+  - payload 2016 bytes → timeout at offset 0 (50 ms)
+  - finalize skipped → fast run (~1 s per attempt vs v1.0.28)
+  - clean DFU serial every time
+- Stage 2 Linux guesses per macro-attempt: `128`, `64`, `0` (white log).
+
+## Reference: [verygenericname/gaster](https://github.com/verygenericname/gaster)
+
+README says **"Fixes A10x"** (CPID `0x8011` / A10X), not **A10 Fusion (`0x8010`)**.
+
+Compared to [0x7ff/gaster](https://github.com/0x7ff/gaster) main (May 2026):
+
+| Area | verygenericname fork | Relevant for our `0x8010`? |
+|------|----------------------|----------------------------|
+| `notA9` config includes `dfu_handle_bus_reset` | Yes (same as upstream now) | Already in our `notA9_config_t` |
+| Stage 4 overwrite `(2,3,0,0x80)` 48 bytes | Same | Already v1.0.29 |
+| After payload: skip 16B + 0-len DNLOAD for `0x8011`/`0x8012` only | A10X/T2 fix | **Not** for `0x8010` — A10 still runs suffix + zero-length + status |
+| `usb_timeout` default **5 ms** | gaster default | We used **50 ms** on Linux only — diverges from gaster stage 2 abort timing |
+| iBoot-2696 / `0x8010` offsets | Same as ours | No new offsets |
+
+Conclusion: the fork does **not** add a distinct A10 (`0x8010`) patch beyond current upstream gaster. It is still worth matching gaster’s **5 ms** `USB_TIMEOUT` default and running finalize with that timeout (not `5000 ms`).
+
+## Next Experiment
+
+### v1.0.30
+
+- Set Linux `USB_ABORT_TIMEOUT_DEFAULT` to **5 ms** (gaster default; override with `USB_TIMEOUT=50` if needed).
+- Re-enable gaster-style finalize for ROP-prefix / A10, using `checkm8_usb_timeout_ms()` so finalize cannot block ~25 s.
+- Log `usb_timeout` at exploit start.
+
 Expected log:
 
 ```text
-checkm8_exploit: version 1.0.29
-send_overwrite: sending 48 bytes (bmReqType=0x02, bReq=0x03, wIndex=0x80)
-skipping DFU finalize (ROP-prefix / Linux wedge)
+checkm8_exploit: version 1.0.30
+checkm8_exploit: starting exploit on CPID 0x8010 (usb_timeout=5 ms)
+send_dfu_finalize: ... (fast fail or OK, not 5s gaps)
 ```
 
