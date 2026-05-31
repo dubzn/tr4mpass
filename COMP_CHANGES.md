@@ -23,7 +23,64 @@ Rama de trabajo para iterar el exploit checkm8 en **iPhone 7-class / iBoot-2696*
 
 **Estado conocido (logs v1.0.30, white + black):** stages 1–3 OK; overwrite STALL OK; payload 2016 B → timeout; serial limpio sin PWND.
 
-**Última corrida (v1.0.32, 2026-05-30):** baseline `payload_timeout=5 ms` (sin env override). Finalize ~1 s/intento (fix OK). Sin PWND. Falta correr con `CHECKM8_PAYLOAD_TIMEOUT_MS=1000` — ver [`CHECKM8_A10_DEBUG_LOG.md`](CHECKM8_A10_DEBUG_LOG.md) sección *v1.0.32 — prueba en hardware*.
+**Última corrida en logs (`log_white` / `log_black`, 2026-05-30 ~23:01):** binario **1.0.32** (`payload_timeout=5 ms`). Sin PWND. **1.0.33 aún no corrida en hardware** — recompilar en Linux y repetir.
+
+---
+
+## Síntesis OPUS vs Composer vs rama `comp-changes`
+
+### OPUS (`OPUS_ANALYSIS.txt`) — análisis sin implementación
+
+Opus identificó 5 puntos leyendo gaster; el TXT termina en *"Now let me fix all three bugs"* **sin commit de código**.
+
+| # | Hallazgo Opus | ¿En código hoy? | Evidencia en logs |
+|---|---------------|-----------------|-------------------|
+| 1 | Overwrite `(2,3,0,0x80)` 48 B, no `(0,0,0,0)` 64 B | **Sí** — desde v1.0.29 | `send_overwrite: 48 bytes (bmReqType=0x02…)` |
+| 2 | `checkm8_overwrite_t` solo `dfu_callback_t`, sin `heap_pad` | **Sí** — struct 48 B | `sizeof(ow)` en log = 48 |
+| 3 | Sin pre-payload DNLOAD antes del payload | **Sí** — desde v1.0.29 | no aparece en logs |
+| 4 | Layout `data_sz=2016` vs calloc 2048+ | **Ya alineado** — Opus exageró el “bloque separado” | `assemble_payload: data=2016 transfer=2016` |
+| 5 | EP0 colgado tras overwrite STALL → PIPE/timeout en lo siguiente | **Observado** — no resuelto | payload + finalize timeout; serial limpio |
+
+**Conclusión Opus:** v1.0.28 iba en dirección **incorrecta**; la corrección gaster (1–3) **ya está en la rama** vía revisión Composer + v1.0.29. Opus no aportó código nuevo; confirmó lo que Composer ya había cruzado en el debug log (sección *Opus analysis review*).
+
+**Pendiente de Opus (sigue abierto):** el EP0 “wedged” tras STALL — gaster igual manda payload con timeout corto e ignora errores; nosotros vemos timeout sin PWND → el problema probablemente **no** es solo el tipo de request del overwrite.
+
+### Composer — research + implementación
+
+| Entregable | Tipo | Estado |
+|------------|------|--------|
+| [`CHECKM8_REFERENCES.md`](CHECKM8_REFERENCES.md) | Research GitHub (gaster, King, ipwndfu #158, #31/#53) | Documentado |
+| Cruzado Opus vs gaster main | Review en debug log | Hecho |
+| v1.0.30 — `usb_timeout=5 ms` Linux | Código | Hecho |
+| v1.0.31 — finalize sin bloqueo 15 s | Código | **Validado** en logs 1.0.32 (~1 s/intento) |
+| v1.0.32 — env `CHECKM8_PAYLOAD_TIMEOUT_MS` | Código | Hecho; corrida sin override |
+| v1.0.33 — Linux 8010 payload **1000 ms** auto | Código | **Sin log aún** |
+| Path **King** (3 stages, overwrite grande `(0,0,0,0)`) | Research only | **No implementado** — mayor divergencia vs gaster |
+
+### Research Composer: King vs tr4mpass (8010)
+
+Referencia con PWND documentado en Linux ([pgarba/King](https://github.com/pgarba/King)):
+
+| Paso | King (ipwndfu-style) | tr4mpass (gaster 4-stage) |
+|------|----------------------|---------------------------|
+| Pipeline | 3 stages + `usb_reset` | RESET → SETUP → SPRAY → PATCH + bus reset |
+| Overwrite USB | `(0, 0, 0, 0)` blob **~1.5 KB** (`t8010_overwrite`) | `(2, 3, 0, 0x80)` **48 B** `dfu_callback_t` |
+| Jump target | `0x1800B0800` (callback chain en overwrite) | `nop_gadget` → `insecure_memory_base` |
+| Payload | Shellcode King ~0x610+ en chunks **0x800**, timeout **100 ms** | ROP+notA9 **2016 B** en 1 chunk, timeout 5 ms (→ 1000 ms en v1.0.33) |
+| Post-payload | `sleep 500 ms` + **`usb_reset`** — **sin** suffix/GETSTATUS DFU | suffix + zlen + GETSTATUS (gaster) → skip si EP0 colgado |
+| Stage 2 UAF | async 0x800 'A' + CLR (0x21,4) | async 0x800 zeros + abort timing Linux |
+
+**Hipótesis:** en Linux/xHCI, el path gaster-notA9 puede estar “casi bien” en stages 1–3 pero fallar en la transición overwrite→payload→pwn; King prueba otra forma de colocar el callback y **no usa finalize DFU**.
+
+### Progreso real hasta ahora
+
+| Área | Progreso |
+|------|----------|
+| Alineación gaster (Opus 1–3) | **Completo** |
+| Velocidad de iteración (finalize) | **Completo** (v1.0.31) |
+| PWND | **Ninguno** |
+| Experimento payload 1000 ms | **Código listo (v1.0.33), sin corrida** |
+| Path King | **Solo research** |
 
 ---
 
@@ -57,20 +114,20 @@ sudo ./tr4mpass …
 1. Compilar en la máquina Linux con el iPhone en DFU.
 2. Correr exploit; copiar salida a `src/log_white.txt` / `src/log_black.txt`.
 3. Buscar en log:
-   - `checkm8_exploit: version 1.0.32`
-   - `usb_timeout=` y `payload_timeout=`
-   - `send_dfu_finalize: skipping status polls` (esperado si EP0 colgado)
-   - `checkm8_verify_pwned` → `PWND` o serial limpio
-4. Anotar resultado en [`CHECKM8_A10_DEBUG_LOG.md`](CHECKM8_A10_DEBUG_LOG.md) (versión, env, dispositivo, 1–3 líneas de resultado).
+   - `checkm8_exploit: version 1.0.33` (o la versión actual)
+   - `payload_timeout=1000 ms` en Linux 8010
+   - `send_payload_chunks: done -- 2016/2016` vs timeout
+   - `checkm8_verify_pwned` → `PWND` o serial limpio/corrupto
+4. Anotar resultado en [`CHECKM8_A10_DEBUG_LOG.md`](CHECKM8_A10_DEBUG_LOG.md).
 
 ---
 
 ## Próximos experimentos (orden sugerido)
 
-1. **v1.0.32 + `CHECKM8_PAYLOAD_TIMEOUT_MS=1000`** — retest señal de serial corrupto (v1.0.24).
-2. **`USB_TIMEOUT=50`** sin cambiar payload — comparar `UAF triggered (sent=…)`.
-3. **Path King/ipwndfu** para `0x8010` — overwrite `0x5C0` + `bmRequestType=0,bReq=9` (código futuro en esta rama).
-4. **Spray gaster #31** — `checkm8_no_leak` con `DFU_MAX_TRANSFER_SZ` solo en 8010 (flag/env).
+1. **v1.0.33 en Linux** — `make && sudo ./tr4mpass …` (payload 1000 ms automático en 8010).
+2. **Control:** binario [gaster](https://github.com/0x7ff/gaster) en el **mismo** host USB → ¿PWND? Si gaster sí y tr4mpass no → bug nuestro; si ambos no → stack USB/host.
+3. **v1.0.34 (código):** path King para `0x8010` detrás de `CHECKM8_KING_PATH=1` — overwrite grande + sin finalize DFU + `usb_reset` post-payload.
+4. **`USB_TIMEOUT=50`** — solo si UAF stage 2 inestable.
 
 ---
 

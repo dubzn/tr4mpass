@@ -671,29 +671,35 @@ Conclusion: the fork does **not** add a distinct A10 (`0x8010`) patch beyond cur
 
 **Nota:** esa corrida no probó payload 1000 ms (solo documentación + baseline). Ver **v1.0.33** abajo.
 
-### v1.0.33 — experimento en código (pendiente log)
+### v1.0.33 — experimento en código (pendiente log en hardware)
 
 - **Linux + CPID 0x8010:** `payload_timeout` default **1000 ms** (stage 4 solo); `usb_timeout` sigue 5 ms.
 - Log esperado: `Linux A10 experiment: payload DNLOAD timeout 1000 ms`.
 - Desactivar experimento: `CHECKM8_PAYLOAD_TIMEOUT_MS=0`.
-- Override manual: `CHECKM8_PAYLOAD_TIMEOUT_MS=<ms>`.
 
-**Señales a buscar en el próximo run:** `send_payload_chunks: done -- 2016/2016 bytes sent` vs timeout; serial corrupto (v1.0.24) o `PWND:[checkm8]`.
+**Estado logs (`log_white` / `log_black`, actualizados 2026-05-30 ~23:04):** corrida **1.0.32** (`payload_timeout=5 ms`). **1.0.33 no aparece aún** — recompilar en Linux desde `comp-changes` y repetir.
+
+## Síntesis OPUS + Composer (2026-05-30)
+
+Ver tabla en [`COMP_CHANGES.md`](COMP_CHANGES.md) (*Síntesis OPUS vs Composer*).
+
+**Resumen:** Opus acertó sobre v1.0.28 (overwrite/payload USB incorrectos) — **ya corregido** en v1.0.29+. Composer implementó finalize rápido (v1.0.31, validado en logs) y payload 1000 ms auto (v1.0.33, sin corrida). **Sin PWND.** Research Composer señala **King** (3 stages, overwrite grande, sin finalize DFU) como siguiente cambio de código, no más parches al path gaster ya alineado.
 
 ## Next Experiment
 
-### Correr v1.0.33 en Linux (rama `comp-changes`)
+### 1 — Correr v1.0.33 (prioridad)
 
 ```bash
-make && sudo ./tr4mpass …
-# debe decir version 1.0.33 y payload_timeout=1000 ms sin export
+git checkout comp-changes && make && sudo ./tr4mpass …
 ```
 
-Baseline gaster otra vez: `CHECKM8_PAYLOAD_TIMEOUT_MS=0`.
+Buscar: `version 1.0.33`, `payload_timeout=1000 ms`, `2016/2016 bytes sent` o serial distinto.
 
-### Después (una variable por sesión)
+### 2 — Control gaster en mismo Linux
 
-1. **`USB_TIMEOUT=50`** (sin payload override) — UAF `sent=` vs baseline.
-2. **King / ipwndfu stage-3** for `0x8010` — código pendiente; [pgarba/King](https://github.com/pgarba/King).
-3. **gaster #31 spray** — `checkm8_no_leak` con `DFU_MAX_TRANSFER_SZ` solo en 8010 (flag futuro).
+Mismo cable/puerto: `./gaster pwn` → ¿`PWND:[checkm8]`?
+
+### 3 — v1.0.34 King path (implementación futura)
+
+Overwrite `(0,0,0,0)` blob grande, payload chunks 0x800 @ 100 ms, `usb_reset` sin finalize DFU — [pgarba/King](https://github.com/pgarba/King) `checkm8()` + `t8010_overwrite`.
 

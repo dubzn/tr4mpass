@@ -163,7 +163,8 @@ insecure_memory_base 0x1800B0000
 2. **gaster upstream** sigue siendo la referencia de offsets y stage 4 para 8010; issues #31/#53 son sobre otros CPIDs o USB host.
 3. **pgarba/King** es la referencia más fuerte de “**8010 + Linux + PWND**” con código C abierto — merece un diff de stage 3 USB vs nuestra implementación gaster-notA9.
 4. Problemas post-PATCH en la comunidad apuntan a **USB (timeout 5 ms, cable, reset)** y **finalize**, no a offsets iBoot-2696 incorrectos en forks recientes.
-5. Nuestro bloqueo actual (payload DNLOAD timeout, serial limpio) encaja con issues Linux de ipwndfu/gaster más que con “fork A10 olvidado en GitHub”.
+5. Nuestro bloqueo actual encaja con issues Linux de ipwndfu/gaster; offsets iBoot-2696 en forks recientes parecen correctos.
+6. **King** es el siguiente experimento de **código** (no MD): pipeline distinto con PWND documentado en Linux para el mismo 8010.
 
 ---
 
@@ -172,3 +173,4 @@ insecure_memory_base 0x1800B0000
 | Fecha       | Notas |
 |-------------|-------|
 | 2026-05-30  | Investigación inicial: gaster, verygenericname, King, ipwndfu #158, gaster #31/#53/#15, artículo iPhone 7 |
+| 2026-05-30  | Síntesis con OPUS + estado rama `comp-changes`; King stage-3 diff vs gaster |
