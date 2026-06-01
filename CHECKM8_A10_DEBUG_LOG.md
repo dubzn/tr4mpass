@@ -1291,3 +1291,117 @@ sudo ./tr4mpass
 **Señales esperadas:**
 - Si no hay STALL y el payload DNLOAD funciona → excelente (sin bus reset needed)
 - Si hay STALL inesperado → el BootROM rechaza el request `(0,0,0,0)` en este estado
+
+---
+
+## Re-análisis Crítico (2026-06-01 ~01:00) — Logs con nuevos experimentos
+
+### Runs ejecutados:
+
+| Device | Run 1 | Run 2 |
+|--------|-------|-------|
+| White  | `EP0_RECOVERY=none` + `FINALIZE=gaster` (~00:50) | `KING_PATH` (~00:53) |
+| Black  | `KING_PATH` (~00:55) | `EP0_RECOVERY=bus-reset` + `FINALIZE=skip` + `DELAY=500ms` (~00:58) |
+
+---
+
+### 🔴 KING PATH — Confirmado inútil (6/6 intentos fallidos)
+
+**En ambos devices, el overwrite via `(0x00, 0x00, 0, 0)` produce STALL en todos los intentos:**
+```
+send_overwrite [KING PATH]: ret=-9 (Pipe error)
+send_overwrite [KING PATH]: unexpected STALL -- EP0 will be halted (King path ineffective)
+```
+**Conclusión: El KING PATH no es aplicable aquí.** El BootROM en este estado (DFU post-heap-spray con freed io_buffer) responde con STALL a cualquier OUT request en EP0, incluyendo el `(0x00, 0x00, 0, 0)`. El STALL no es específico del `(0x02, 0x03)` — es el comportamiento del BootROM cuando el overwrite toca la estructura de control DFU correctamente. El KING PATH funciona en otras implementaciones donde el BootROM acepta el OUT sin STALL.
+
+Además: tras el STALL del King Path, el device entra en un estado degradado grave:
+- `set configuration failed, errno=110` (Connection timed out)
+- Todos los string descriptors fallan con timeout por ~30 segundos
+- El serial leído post-intento es basura: `[43 40 4F 40 04 59]` = `"C@O@.Y"` (WHITE) y `[43 E0 17 B4 C4 60]` (BLACK) — **¡esto es memoria corrupta del BootROM!**
+
+**Esto es una señal positiva:** la corrupción del serial indica que el overwrite SÍ llega al freed io_buffer. El BootROM está leyendo datos corruptos de la zona UAF. La memoria fue modificada pero el ROP no ejecutó (o ejecutó y crasheó).
+
+---
+
+### 🟡 WHITE `EP0_RECOVERY=none` — HALLAZGO CRÍTICO: `actual=2016, completed=1`
+
+```
+send_payload_chunks: offset=0 ret=-7 (Operation timed out)
+  submit=0 status=TIMED_OUT actual=2016 completed=1 cancel_requested=1
+```
+
+**`actual=2016` + `completed=1` SIN bus reset.** Esto significa que el payload de 2016 bytes se transfirió completamente a nivel libusb/usbcore **incluso sin bus reset**. El `ret=-7` es porque el STATUS phase (la fase de confirmación tras el DATA stage) no volvió dentro del timeout de 1000ms — pero el DATA stage ya completó.
+
+Esto contradice nuestra hipótesis previa de que "sin bus reset el kernel bloquea el SETUP packet porque EP0 está halted". En realidad:
+- El DATA stage del DNLOAD sí llega al BootROM
+- El BootROM recibe los 2016 bytes
+- El STATUS phase (ACK del BootROM que confirma recepción) nunca llega → libusb cancela a los 1000ms
+
+**¿Por qué el STATUS phase no llega?** El BootROM está ejecutando el callback (nop_gadget → ROP chain) y no puede responder al STATUS phase porque el DFU task está ocupado ejecutando el ROP. O bien, el BootROM crashea durante el ROP y ya no puede responder.
+
+**El bus reset en v1.0.34 NO era necesario para entregar los 2016 bytes** — ya los entregábamos sin él. Lo que v1.0.34 logró diferente fue que el STATUS phase completó (ret=2016 en lugar de ret=-7), lo que implica que con bus reset el BootROM respondió al STATUS. Pero con bus reset el ROP no ejecutó porque `dfu_handle_bus_reset()` limpió el estado.
+
+---
+
+### 🟠 Conclusión revisada — El problema es el ROP, no la entrega del payload
+
+**Cronología real de lo que ocurre:**
+1. El overwrite llega → STALL ✅
+2. El payload de 2016 bytes llega (DATA stage) → `actual=2016, completed=1` ✅  
+3. El BootROM recibe el callback (nop_gadget) e intenta ejecutar el ROP
+4. **El ROP falla o el BootROM crashea** → no puede responder al STATUS phase
+5. Libusb cancela después del timeout → `ret=-7`
+6. Nosotros mandamos bus reset de verificación → el device reaparece en DFU limpio
+
+**La USB plumbing está completa y funciona.** El problema es en el ROP chain o en el shellcode.
+
+---
+
+### 🔍 ¿Por qué falla el ROP?
+
+El ROP chain para A10 hace:
+1. `write_ttbr0(insecure_memory_base)` → cambia TTBR0
+2. `tlbi(0)` → TLB invalidate
+3. `exec_addr(0)` → salta al shellcode
+4. (shellcode ejecuta, debería parchear serial)
+5. `write_ttbr0(ttbr0_addr)` → restaura TTBR0
+6. `tlbi(0)` → TLB invalidate
+7. `ret_gadget` → return
+
+**Candidatos al fallo:**
+
+**A) La secuencia ROP está mal ensamblada.** `usb_rop_callbacks` con 6 callbacks y `ROP_MAX_BLOCK_SZ=0x50=80` genera bloques de 80 bytes. Con 6 callbacks (ceil(6/5)=2 grupos), el ROP prefix total es:
+- `rop_prefix_sz = ttbr0_sram_off + 2*8 = 0x600 + 16 = 0x610 bytes`
+- El payload se empieza en `insecure_memory_base + 0x610 = 0x1800B0610`
+
+**B) El `exec_addr` apunta a la dirección virtual `0x1820B0610`** bajo el nuevo TTBR0. Pero el nuevo TTBR0 mapea `insecure_memory_base` (SRAM física `0x1800B0000`). La VA `0x1820B0610` bajo el nuevo TTBR0 debe mapear a la misma dirección física donde está el shellcode. Si el mapping es `0x1820B0000 → físico 0x1800B0000`, entonces `0x1820B0610` → físico `0x1800B0610`. ¿Y el shellcode físicamente está en `0x1800B0610`? El payload buffer que enviamos tiene:
+- `[0..0x60F]` = ROP prefix (1552 bytes = `rop_prefix_sz`)
+- `[0x610..0x610+120]` = shellcode ARM64
+
+**Sí**, el shellcode está en el offset correcto. El mapping parece correcto.
+
+**C) Las TTBR0 entries en el ROP prefix son incorrectas.** El payload pone en `buf[ttbr0_vrom_off]` y `buf[ttbr0_sram_off]` los page table entries. Pero `ttbr0_vrom_off=0x400` y `ttbr0_sram_off=0x600`. La TTBR0 en A10 usa **16KB granule** por lo tanto el TTBR0 apunta a una tabla de 1024×8=8192 bytes. Los entries en `0x400` y `0x600` dentro del buffer que enviamos se usarán como page table entries para el BootROM. Si estos entries no están correctamente alineados o son incorrectos para la dirección de exec_addr, el CPU haría un translation fault al saltar a `0x1820B0610`.
+
+**D) El nop_gadget en `0x10000CC6C` no es realmente un gadget que pueda usarse como callback.** Si el BootROM invoca `callback(arg1, arg2)` y el nop_gadget crashea (bad instruction, stack alignment, etc.), el BootROM muere antes de ejecutar el ROP.
+
+---
+
+### Próximo experimento: Verificar integridad del ROP con log extendido
+
+El próximo paso debería ser verificar si el ROP al menos inicia. La señal más clara sería:
+- Si `write_ttbr0` ejecuta pero `exec_addr` falla → el device se resetea inesperadamente (diferente addr USB)
+- Si todo falla antes de `write_ttbr0` → el device sigue en la misma addr USB (lo que observamos)
+
+**La USB addr post-stage4 en WHITE es siempre 54** — la misma durante todo el run. Esto sugiere que el ROP falla muy temprano (antes de que el shellcode haga nada que cambie el estado USB).
+
+### Próximo experimento: EP0_RECOVERY=bus-reset + FINALIZE=skip + DELAY=2000ms
+
+La teoría: si el ROP ejecuta parcialmente pero es lento (como el TTBR0 switch + TLB invalidate pueden tomar tiempo), 500ms puede no ser suficiente. Probar 2000ms:
+```bash
+export CHECKM8_EP0_RECOVERY=bus-reset
+export CHECKM8_FINALIZE_MODE=skip
+export CHECKM8_POST_PAYLOAD_DELAY_MS=2000
+sudo ./tr4mpass
+```
+
+Pero dado que `actual=2016 completed=1` ya funciona SIN bus reset, la siguiente prioridad es depurar el ROP chain en sí mismo — verificar los page table entries y el nop_gadget.
