@@ -931,3 +931,39 @@ send_payload_chunks: offset=0 ret=2016    <-- payload entregado sin bus reset
 
 **Resultado:** _pendiente de implementación y test en hardware_
 
+---
+
+## Research Correction (2026-06-01)
+
+La hipótesis `USBDEVFS_RESETEP(EP0)` quedó más débil después de revisar documentación y código del kernel Linux.
+
+Fuentes revisadas:
+- Linux USB docs: `USBDEVFS_RESETEP` y `USBDEVFS_CLEAR_HALT` están documentados para endpoints `1..15`, bulk/interrupt, no para EP0/control.
+- Linux `drivers/usb/core/devio.c`: `proc_resetep()` llama `findintfep()`, que busca el endpoint en descriptores de interfaz. EP0 normalmente no aparece en esos descriptores, por lo que esperamos `-ENOENT`/`-EINVAL`.
+- Linux USB host API: endpoints de control no "haltan" como bulk/interrupt; reportan protocol stall con códigos similares.
+- Patch histórico xHCI: el driver ya tiene lógica especial para stalls en control endpoints.
+
+**Conclusión actual:** `v1.0.38` sigue siendo un diagnóstico útil, pero no debe tratarse como la solución más probable. Si falla con `ENOENT`/`EINVAL`, confirma que el kernel no expone reset/clear directo para EP0 vía usbfs. Si sorprendentemente devuelve `0`, el siguiente dato crítico es si el payload llega sin bus reset.
+
+## Hypothesis Queue (2026-06-01)
+
+Regla para los próximos pasos: probar una hipótesis por vez, con una versión/log inequívocos, y registrar siempre la primera verificación post-stage4 antes de contaminar el estado con retries.
+
+| ID | Hipótesis | Evidencia actual | Prueba aislada | Señal esperada |
+|----|-----------|------------------|----------------|----------------|
+| H1 | `USBDEVFS_RESETEP` no sirve para EP0 | Docs/kernel dicen endpoints `1..15`; `libusb_clear_halt(EP0)` ya dio `NOT_FOUND` | Correr `v1.0.38` gaster-path y loguear `errno` real de EP0 OUT/IN | `ENOENT`/`EINVAL` y payload vuelve a timeout |
+| H2 | El bloqueo no es un "HALT limpiable", sino estado xHCI/control-transfer/device tras overwrite | Control endpoints no haltan como bulk; xHCI maneja stalls control internamente | Capturar `usbmon` desde overwrite hasta payload; comparar si el SETUP/DATA del `DFU_DNLOAD` sale del host | Si no sale DATA: host/TD; si sale DATA: BootROM/device state |
+| H3 | Bus reset entre overwrite y payload libera USB pero destruye heap/overwrite | `v1.0.34` entregó payload+finalize, pero serial limpio y addr sin reset de shellcode | No repetir como solución; usarlo solo como control "payload path healthy" | Payload `ret=2016`, finalize OK, sin PWND |
+| H4 | El "King path" probado no fue King completo | `v1.0.37` solo cambió request type con overwrite 48 B; King usa overwrite grande + callback chain | Correr binario King upstream en el mismo host/cable; si funciona, portar flujo completo | King muestra `PWND:[checkm8]` o falla igual que tr4mpass |
+| H5 | El problema es host USB/cable/controlador, no tr4mpass | gaster/King reportan sensibilidad a Linux/xHCI, hubs y cables | Correr upstream `gaster pwn` mismo host/puerto/dispositivo | Si gaster falla también: stack host; si gaster pwn: bug nuestro |
+| H6 | El payload no llega realmente sin reset, aunque el código lo trate como "completion unknown" | `v1.0.33/36/37` timeoutean en offset 0 con 1000 ms | `usbmon` o instrumentación de transferencia con `actual_length`/status más cruda | Confirmar si hay DATA stage parcial/completo |
+| H7 | Drift de versión/docs está ensuciando conclusiones | Código actual trae `v1.0.38`, pero logs siguen diciendo `1.0.36`; `COMP_CHANGES.md` quedó en `1.0.33` | Bump de `CHECKM8_EXPLOIT_VERSION` y actualizar docs antes de hardware | Logs identificables por experimento |
+
+## Test Plan (one by one)
+
+1. **H7 / higiene primero:** bump real de versión antes de otra corrida y asegurar que el log diga el experimento correcto.
+2. **H1 / `v1.0.38`:** correr `USBDEVFS_RESETEP` en hardware Linux. Resultado esperado: fallo EP0; si funciona, mirar payload inmediatamente.
+3. **H5 / control gaster:** correr upstream `0x7ff/gaster` en el mismo host/cable/puerto.
+4. **H4 / control King:** correr upstream `pgarba/King` en el mismo host/cable/puerto.
+5. **H2/H6 / traza USB:** si gaster/King divergen de tr4mpass, capturar `usbmon` en overwrite→payload para ver si el host emite el `DFU_DNLOAD` DATA stage.
+6. **Port King completo:** solo si King logra `PWND` o muestra una señal USB cualitativamente mejor que gaster/tr4mpass.
