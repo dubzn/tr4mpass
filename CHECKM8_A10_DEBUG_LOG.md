@@ -1469,3 +1469,118 @@ El default es `EP0_RECOVERY=none` + `FINALIZE=gaster`. Si el shellcode parchea e
 
 **Si el serial sigue limpio** → el problema está antes del shellcode: en el ROP chain (func_gadget, write_ttbr0, o tlbi).
 
+---
+
+## v1.0.41 — Resultados (2026-06-01 ~11:08) — Spinloop fix NO fue el root cause
+
+### Estado: MISMO comportamiento que v1.0.40
+
+```
+send_payload_chunks: offset=0 ret=-7 (Operation timed out)
+  submit=0 status=TIMED_OUT actual=2016 completed=1 cancel_requested=1
+checkm8_verify_pwned: serial = "CPID:8010..." (len=98)
+PWND marker not found in serial
+```
+
+El fix del `cbnz → nop` no cambió nada observable. El serial sigue limpio en los 3 intentos de ambos devices. Esto confirma que **el ROP chain falla antes de llegar al shellcode** — el shellcode nunca ejecuta, independientemente del spinloop.
+
+Nota: los logs aún dicen `v1.0.40: EP0 recovery mode` — hay strings hardcodeados en `checkm8_patch.c` que debemos actualizar (cosmético, no funcional).
+
+### Nueva observación: addr cambia entre stage3 y stage4 en WHITE
+
+```
+[white, attempt 1] stage 3: addr 12 → stage 4: addr 13  (device reset entre stages)
+[white, attempt 2] stage 3: addr 13 → stage 4: addr 14
+[white, attempt 3] stage 3: addr 14 → stage 4: addr 15
+```
+
+Esto indica que el **device hace un hardware reset al final de stage 3** en white (líneas 60-67 del log: `reset failed errno=22`, `File doesn't exist`, `addr 13`). El black se mantiene en `addr 8` todo el run.
+
+Este reset espontáneo en stage 3 puede ser problemático: si el heap spray completa el reset y el BootROM reinicializa parcialmente, el freed io_buffer puede ya no estar en la posición esperada cuando llegue el overwrite en stage 4. Sin embargo el overwrite sigue funcionando (STALL correcto) así que el UAF se mantiene.
+
+---
+
+## Análisis Root Cause: ¿Por qué falla el ROP chain?
+
+### El flujo real después del overwrite:
+
+1. Overwrite lanza → `nop_gadget` queda como callback, `insecure_memory_base` como `next`
+2. Nosotros enviamos payload DNLOAD de 2016 bytes → `actual=2016, completed=1`
+3. El BootROM recibe el payload y completa el DFU_DNLOAD DATA stage
+4. El BootROM invoca el callback → `nop_gadget()` ejecuta (retorna inmediatamente)
+5. El BootROM sigue el `next` pointer → llega a `insecure_memory_base = 0x1800B0000`
+6. El BootROM intenta invocar el callback del struct en `0x1800B0000` → `func_gadget`
+7. **¿Qué hace `func_gadget` exactamente?** ← PREGUNTA CRÍTICA SIN RESPONDER
+
+### Hipótesis primaria: `func_gadget` no encuentra los argumentos en los offsets correctos
+
+`usb_rop_callbacks` coloca los datos en el buffer así:
+```
+buf + offsetof(dfu_callback_t, callback) = buf[0x20]:
+  block0 (80 bytes): [(func_gadget|next_addr) × 5 entries]  buf[0x20..0x6F]
+  block1 (80 bytes): [(arg|func) × 5 entries]               buf[0x70..0xBF]
+```
+
+El BootROM llega a `insecure_memory_base = 0x1800B0000` y trata el struct como `dfu_callback_t`:
+- `callback` field es a offset `+0x20` dentro del struct → `buf[0x20]` = `func_gadget = 0x10000CC4C` ✅
+
+El `func_gadget = 0x10000CC4C` es llamado. Para que el func_gadget funcione correctamente, necesita leer el `arg` y el `func` real desde una posición específica relativa al struct base `0x1800B0000`.
+
+**La posición del `arg` (write_ttbr0 arg = insecure_memory_base) y del `func` (write_ttbr0 = 0x1000003E4) es `buf[0x70..0x7F]`.**
+
+¿Cómo sabe func_gadget dónde está este par (arg, func)? La implementación del gadget en gaster asume una estructura de memoria específica. Si el gadget usa un registro que apunta a la base del struct (`0x1800B0000`) y luego hace `ldr x0, [base + 0x70]` y `ldr x1, [base + 0x78]`, funciona. Pero si usa un offset diferente (relativo al stack o a otro registro), el layout puede no matchear.
+
+### Hipótesis secundaria: `offsetof(dfu_callback_t, callback)` está mal calculado
+
+En nuestro código, `usb_rop_callbacks` empieza en `buf + offsetof(dfu_callback_t, callback)`. Si `dfu_callback_t.callback` está a offset 0x20 en nuestro struct pero en el BootROM real está a un offset diferente (ej: 0x18 o 0x28), el `func_gadget` quedaría en la posición incorrecta.
+
+En gaster, `dfu_callback_t` se define como:
+```c
+typedef struct {
+    uint32_t endpoint;  // +0
+    uint32_t pad_0;     // +4
+    uint64_t io_buffer; // +8
+    uint32_t status;    // +16
+    uint32_t io_len;    // +20
+    uint32_t ret_cnt;   // +24
+    uint32_t pad_1;     // +28
+    uint64_t callback;  // +32 = 0x20
+    uint64_t next;      // +40 = 0x28
+} dfu_callback_t;      // total = 48 bytes
+```
+
+Offset 0x20 = 32 bytes. Nuestro struct tiene 32+8=40 bytes de header antes de `callback`. Esto coincide con gaster exactamente ✅ — pero vale confirmar que el BootROM A10 usa exactamente esta misma estructura.
+
+### Hipótesis terciaria: el struct en insecure_memory_base no empieza donde el BootROM espera
+
+Cuando el BootROM sigue `next = 0x1800B0000`, ¿trata toda la dirección como la BASE del struct `dfu_callback_t`, o como un puntero DENTRO del struct (ej: apunta al campo `next` del siguiente struct en la lista)?
+
+Si `next` apunta al campo `next` del siguiente struct (no a su base), entonces el struct base sería `0x1800B0000 - offsetof(next) = 0x1800B0000 - 0x28 = 0x1800AFFD8`. En ese caso:
+- El campo `callback` del siguiente struct estaría en `0x1800AFFD8 + 0x20 = 0x1800AFFF8`
+- `buf[0x1800AFFF8 - 0x1800B0000] = buf[-8]` → ¡FUERA DEL BUFFER! → crash garantizado
+
+Esta hipótesis es crítica pero podemos descartarla si gaster está verificado como funcional en A10 (que sí lo está).
+
+### Hipótesis cuaternaria: el BootROM de A10 no usa el `next` pointer de esta forma
+
+En algunos SoC, la lista de callbacks USB no se itera automáticamente en el firmware — el mecanismo exacto de `next` puede diferir. Si el A10 BootROM no sigue el `next` pointer automáticamente después de invocar el callback, el ROP chain nunca empieza.
+
+---
+
+## Próximos experimentos propuestos
+
+### Experimento 1: Verificar `func_gadget` con payload simplificado (RECOMENDADO)
+Reemplazar el `next = insecure_memory_base` en el overwrite por algo que al menos cause un crash observable. Por ejemplo: poner un valor conocido como `0xDEADBEEFDEADBEEF` y ver si el BootROM se cuelga de forma diferente.
+
+### Experimento 2: Agregar dump del payload en el log
+Imprimir los primeros 80 bytes del payload ensamblado en hex para verificar que `func_gadget = 0x10000CC4C` queda en `buf[0x20]` como se espera.
+
+### Experimento 3: Probar con `insecure_memory_base` directamente como callback (sin ROP prefix)
+Si ponemos `callback = insecure_memory_base` directamente (en lugar de `nop_gadget` + `next`), el BootROM saltaría directamente al inicio del payload buffer. Si eso funciona, el problema está en la cadena nop_gadget → next → func_gadget.
+
+### Experimento 4 (ya documentado en v1.0.40): Verificar `usb_timeout` en stage 2
+El black log muestra `usb_timeout=5ms` en stage 2. Debería ser `usb_timeout=50ms`. Este valor sigue en 5ms aunque lo habíamos corregido — verificar si el fix llegó a compilarse.
+
+**Acción inmediata: implementar Experimento 2 (hex dump del payload) para confirmar layout.**
+
+
