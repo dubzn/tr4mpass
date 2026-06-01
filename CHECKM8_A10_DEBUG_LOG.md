@@ -1816,7 +1816,106 @@ Aparentemente correcto. El `write_ttbr0` recibe `insecure_memory_base` como TTBR
 | ROP ejecutando ALGO | ✅ EP0 queda roto post-payload (evidencia directa) |
 | Shellcode ejecuta correctamente | ❌ no hay PWND, EP0 no responde |
 | Direct read retorna serial correcto | ❌ retorna 6 bytes de basura |
-| Investigando: page table math | 🔄 research agent activo |
+| Investigando: page table math | ✅ confirmado correcto (research agent) |
+
+---
+
+## v1.0.44 — RESULTADO CRÍTICO: canary 0x41 NO apareció (2026-06-01 ~17:32-17:37)
+
+### Comando ejecutado:
+```bash
+sudo CHECKM8_DIAG_SHELLCODE=1 ./tr4mpass
+```
+
+### Resultado:
+```
+BLACK: serial = [43 B0 AA 2B 46 5E]  — sin 0x41, en los 3 intentos
+WHITE: serial = [43 50 27 6E 1B 59]  — sin 0x41, en los 3 intentos
+```
+
+**El canary 0x41414141 NO apareció en ningún intento de ningún device.**
+
+### Implicación directa:
+
+El shellcode de diagnóstico era ultra-simple (6 instrucciones, literal pool al +0x20, sin depender de notA9_config):
+```asm
+stp  x29, x30, [sp, #-0x10]!
+ldr  x0, #+28              ; carga gUSBSerialNumber desde pool
+movz w1, #0x4141
+movk w1, #0x4141, lsl #16  ; w1 = 0x41414141
+str  w1, [x0]              ; escribe en gUSBSerialNumber
+ldp  x29, x30, [sp], #0x10
+ret
+```
+
+Si hubiera llegado al shellcode, la primera instrucción útil `str w1, [x0]` habría escrito 0x41 en los primeros bytes del serial. **No lo hizo.**
+
+### Conclusión definitiva:
+
+**El ROP chain falla ANTES de llegar a exec_addr (callback[2]).**
+
+Los candidatos:
+1. `write_ttbr0` (callback[0]) — el gadget falla silenciosamente o no existe
+2. `tlbi` (callback[1]) — provoca un fault que aborta la cadena
+3. `func_gadget` mismo no está siendo invocado correctamente
+4. La estructura `dfu_callback_t` en `insecure_memory_base` no está en el lugar correcto
+
+---
+
+### ¿Por qué el EP0 queda roto si el shellcode no ejecuta?
+
+El device SÍ muestra un estado post-ROP distinto al normal (serial de 6 bytes de basura). Esto podría explicarse por:
+
+- El func_gadget se llama, ejecuta parcialmente (llama write_ttbr0), pero el STR en write_ttbr0 bajo la nueva TTBR0 falla con un data abort → el BootROM maneja el abort y aborta la DFU transfer → EP0 queda en estado de error
+
+- O bien: write_ttbr0 sí corre (TTBR0 cambia) pero `tlbi` causa un fault porque la CPU necesita que la nueva página sea válida en ese momento (timing issue con el TLB invalidation) → abort → mismo resultado
+
+---
+
+### Hipótesis sobre `write_ttbr0`:
+
+`write_ttbr0 = 0x1000003E4` para A10. Esta es una función del BootROM que escribe TTBR0_EL1 y hace ISB. Si existe como función en el BootROM, el BLR funciona. Si la dirección es incorrecta → CPU ejecuta código arbitrario del ROM → probable fault.
+
+**Acción necesaria:** Verificar en gaster_ref.c y otras fuentes si `write_ttbr0 = 0x1000003E4` es correcto para iBoot-2696.0.0.1.33. Buscar disassembly de BootROM A10 para confirmar la dirección.
+
+---
+
+### ¿Qué hace func_gadget realmente?
+
+`func_gadget = 0x10000CC4C` ejecuta:
+```asm
+LDP X8, X10, [X0, #0x70]   ; carga arg y func
+MOV X0, X8
+BLR X10                     ; llama func(arg)
+```
+
+Si el BootROM llama `func_gadget(struct_base)` con x0=struct_base, y struct_base es `insecure_memory_base = 0x1800B0000`, entonces:
+- Lee arg = `*(0x1800B0000 + 0x70)` = `buf[0x70]` = `insecure_memory_base` (para write_ttbr0)
+- Lee func = `*(0x1800B0000 + 0x78)` = `buf[0x78]` = `write_ttbr0`
+
+Pero `buf[0x70]` y `buf[0x78]` están en **block1** del ROP chain. El bloque1 para el slot 0 comienza en `buf + offsetof(dfu_callback_t, callback) + 0x50` aproximadamente. Necesito verificar que los offsets del usb_rop_callbacks estén colocando los datos correctamente en `0x1800B0070` y `0x1800B0078`.
+
+**Acción siguiente:** Agregar un dump completo de `buf[0x60..0xBF]` (la zona del block1) en el log para verificar que los punteros de write_ttbr0 y sus args están en las posiciones correctas.
+
+---
+
+### Estado actualizado del diagnóstico
+
+| Componente | Estado |
+|-----------|--------|
+| UAF trigger (stage 2) | ✅ funciona |
+| Heap spray (stage 3) | ✅ funciona |
+| Overwrite STALL | ✅ siempre correcto |
+| Payload entregado | ✅ `actual=1592 completed=1` |
+| ROP layout (buf[0x20..0x5F]) | ✅ confirmado via hex dump |
+| func_gadget en buf[0x20] | ✅ confirmado = 0x10000CC4C |
+| next pointer en buf[0x28] | ✅ confirmado = 0x1800B0010 |
+| Page table math | ✅ confirmado por research agent |
+| **Shellcode ejecuta** | **❌ CANARY NO ENCONTRADO** |
+| **Falla en:** | **write_ttbr0 o tlbi (callback[0..1])** |
+| Próxima acción | Dump de buf[0x60..0xBF] + verificar write_ttbr0 addr |
+
+
 
 
 
