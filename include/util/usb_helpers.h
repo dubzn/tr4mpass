@@ -40,6 +40,31 @@ void usb_print_error(int libusb_error);
  */
 void usb_helpers_set_event_ctx(libusb_context *ctx);
 
+typedef struct {
+    int submit_ret;
+    int result;
+    int status;
+    int actual_length;
+    int completed;
+    int cancelled;
+} usb_ctrl_transfer_diag_t;
+
+/*
+ * Submit a control transfer through libusb's async API and return the mapped
+ * libusb result while exposing transfer->status and transfer->actual_length.
+ * This is useful for diagnosing control transfers that time out during the
+ * status phase after a data stage may have partially or fully completed.
+ */
+int usb_ctrl_transfer_diag(libusb_device_handle *dev,
+                           uint8_t bmRequestType,
+                           uint8_t bRequest,
+                           uint16_t wValue,
+                           uint16_t wIndex,
+                           unsigned char *data,
+                           uint16_t wLength,
+                           unsigned int timeout_ms,
+                           usb_ctrl_transfer_diag_t *diag);
+
 /*
  * Submit a control transfer, cancel after abort_timeout_ms, return bytes
  * actually transferred (gaster-style async DNLOAD for checkm8 setup).

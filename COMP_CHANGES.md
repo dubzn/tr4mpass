@@ -2,7 +2,7 @@
 
 Rama de trabajo para iterar el exploit checkm8 en **iPhone 7-class / iBoot-2696** sin mezclar con `main` hasta validar en hardware.
 
-**Versión actual documentada:** código con experimento `v1.0.38` en `checkm8_patch.c`, pero `CHECKM8_EXPLOIT_VERSION` todavía imprime `1.0.36`. Antes de la próxima corrida en hardware hay que hacer bump de versión para no mezclar evidencia.
+**Versión actual del exploit:** `1.0.39` (`CHECKM8_EXPLOIT_VERSION` en logs).
 
 **Criterio de éxito:** serial USB con `PWND:[checkm8]` en DFU.
 
@@ -24,11 +24,12 @@ Rama de trabajo para iterar el exploit checkm8 en **iPhone 7-class / iBoot-2696*
 | **1.0.35** | `libusb_clear_halt(EP0)` | Falla con `LIBUSB_ERROR_NOT_FOUND` |
 | **1.0.36** | Reopen del handle sin bus reset | No limpia el estado; payload timeout |
 | **1.0.37** | "King path" parcial: overwrite 48 B vía `(0,0,0,0)` | También STALL; no entrega payload |
-| **1.0.38** | `USBDEVFS_RESETEP` directo sobre EP0 | Implementado como diagnóstico; research sugiere que EP0 será rechazado |
+| **1.0.38** | `USBDEVFS_RESETEP` directo sobre EP0 | Probado: EP0 OUT/IN devuelven `ENOENT`; fallback reopen; payload timeout |
+| **1.0.39** | Payload DNLOAD diagnóstico (`status`/`actual_length`) + `CHECKM8_EP0_RECOVERY` explícito | Código listo; próxima corrida debe medir si el payload DATA stage realmente avanza |
 
-**Estado conocido actual:** stages 1–3 OK; stage 4 concentra el problema. Sin bus reset, payload `DFU_DNLOAD` timeoutea en offset 0. Con bus reset, payload/finalize llegan pero el serial vuelve limpio. El "King path" parcial también STALLa y deja el dispositivo wedged.
+**Estado conocido actual:** stages 1–3 OK; stage 4 concentra el problema. Sin bus reset, payload `DFU_DNLOAD` timeoutea en offset 0. `USBDEVFS_RESETEP(EP0)` falla con `ENOENT`. Con bus reset, payload/finalize llegan pero el serial vuelve limpio. El "King path" parcial también STALLa y deja el dispositivo wedged.
 
-**Últimas corridas en logs:** `src/log_black.txt` muestra gaster-path con reopen handle (`v1.0.36` impreso) y payload timeout; `src/log_white.txt` muestra `CHECKM8_KING_PATH` parcial y overwrite STALL inmediato. Sin `PWND`.
+**Últimas corridas en logs:** `src/log_white.txt` y `src/log_black.txt` muestran `v1.0.38` real (aunque imprimía `1.0.36`): gaster-path, `USBDEVFS_RESETEP` con `ENOENT`, fallback reopen, payload timeout en offset 0. Sin `PWND`.
 
 ---
 
@@ -59,7 +60,7 @@ Opus identificó 5 puntos leyendo gaster; el TXT termina en *"Now let me fix all
 | v1.0.30 — `usb_timeout=5 ms` Linux | Código | Hecho |
 | v1.0.31 — finalize sin bloqueo 15 s | Código | **Validado** en logs 1.0.32 (~1 s/intento) |
 | v1.0.32 — env `CHECKM8_PAYLOAD_TIMEOUT_MS` | Código | Hecho; corrida sin override |
-| v1.0.33 — Linux 8010 payload **1000 ms** auto | Código | **Sin log aún** |
+| v1.0.33 — Linux 8010 payload **1000 ms** auto | Código | Probado; payload timeout en offset 0 |
 | Path **King** (3 stages, overwrite grande `(0,0,0,0)`) | Research only | **No implementado** — mayor divergencia vs gaster |
 
 ### Research Composer: King vs tr4mpass (8010)
@@ -88,6 +89,8 @@ Referencia con PWND documentado en Linux ([pgarba/King](https://github.com/pgarb
 | Bus reset pre-payload | **Probado**; entrega payload, sin `PWND` |
 | Reopen handle | **Probado**; no limpia el problema |
 | King parcial | **Probado**; también STALL |
+| `USBDEVFS_RESETEP` EP0 | **Probado**; `ENOENT`, no limpia el problema |
+| Payload `actual_length` | **Pendiente con v1.0.39** |
 | King completo | **Pendiente** |
 
 ---
@@ -99,6 +102,7 @@ Referencia con PWND documentado en Linux ([pgarba/King](https://github.com/pgarb
 | `USB_TIMEOUT` | `5` | Timeout global gaster (UAF abort, overwrite, finalize DNLOAD, payload si no hay override) |
 | `USB_ABORT_TIMEOUT_MIN` | `0` | Piso del barrido de abort en stage 2 |
 | `CHECKM8_PAYLOAD_TIMEOUT_MS` | Linux 8010: **1000**; resto: igual que `USB_TIMEOUT` | Solo stage 4 payload. `=0` → forzar gaster (5 ms con default usb) |
+| `CHECKM8_EP0_RECOVERY` | `none` | Stage 4 post-overwrite strategy: `none`, `resetep`, `reopen`, `resetep-reopen`, `bus-reset` |
 
 Ejemplos:
 
@@ -113,6 +117,15 @@ sudo ./tr4mpass …
 # UAF más lento en Linux (solo si stage 2 falla con 5 ms)
 export USB_TIMEOUT=50
 sudo ./tr4mpass …
+
+# v1.0.39: medir actual_length del payload sin repetir recovery fallido
+unset CHECKM8_EP0_RECOVERY
+sudo ./tr4mpass …
+
+# Reproducir explícitamente experimentos previos si hace falta comparar
+CHECKM8_EP0_RECOVERY=reopen sudo ./tr4mpass …
+CHECKM8_EP0_RECOVERY=resetep-reopen sudo ./tr4mpass …
+CHECKM8_EP0_RECOVERY=bus-reset sudo ./tr4mpass …
 ```
 
 ---
@@ -122,7 +135,7 @@ sudo ./tr4mpass …
 1. Compilar en la máquina Linux con el iPhone en DFU.
 2. Correr exploit; copiar salida a `src/log_white.txt` / `src/log_black.txt`.
 3. Buscar en log:
-   - `checkm8_exploit: version 1.0.33` (o la versión actual)
+   - `checkm8_exploit: version 1.0.39` (o la versión actual)
    - `payload_timeout=1000 ms` en Linux 8010
    - `send_payload_chunks: done -- 2016/2016` vs timeout
    - `checkm8_verify_pwned` → `PWND` o serial limpio/corrupto
@@ -132,11 +145,11 @@ sudo ./tr4mpass …
 
 ## Próximos experimentos (orden sugerido)
 
-1. **Bump de versión/logs** — el código actual de `v1.0.38` no puede seguir imprimiendo `1.0.36`.
-2. **v1.0.38 en Linux** — probar `USBDEVFS_RESETEP` y registrar `errno` real para EP0 OUT/IN. Expectativa actual: `ENOENT`/`EINVAL`.
-3. **Control gaster:** binario [gaster](https://github.com/0x7ff/gaster) en el **mismo** host USB → ¿PWND? Si gaster sí y tr4mpass no → bug nuestro; si ambos no → stack USB/host.
-4. **Control King:** binario [King](https://github.com/pgarba/King) en el mismo host/cable/puerto. King es el control fuerte para `8010 + Linux + PWND`.
-5. **usbmon:** capturar overwrite→payload si necesitamos distinguir "host no envía DATA" vs "BootROM recibe DATA pero no ejecuta".
+1. **v1.0.39 baseline:** `unset CHECKM8_EP0_RECOVERY` y correr hardware; leer `status`/`actual` en `send_payload_chunks`.
+2. **Control gaster:** binario [gaster](https://github.com/0x7ff/gaster) en el **mismo** host USB → ¿PWND? Si gaster sí y tr4mpass no → bug nuestro; si ambos no → stack USB/host.
+3. **Control King:** binario [King](https://github.com/pgarba/King) en el mismo host/cable/puerto. King es el control fuerte para `8010 + Linux + PWND`.
+4. **usbmon:** capturar overwrite→payload si necesitamos distinguir "host no envía DATA" vs "BootROM recibe DATA pero no ejecuta".
+5. **Repetir recovery solo con env explícito:** `reopen`, `resetep-reopen` y `bus-reset` quedan disponibles, pero no son default para evitar bucles.
 6. **Port King completo:** solo si King upstream funciona o produce mejor señal que gaster/tr4mpass.
 
 ---

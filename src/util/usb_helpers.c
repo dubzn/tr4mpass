@@ -73,6 +73,126 @@ void usb_print_error(int libusb_error)
     }
 }
 
+int usb_ctrl_transfer_diag(libusb_device_handle *dev,
+                           uint8_t bmRequestType,
+                           uint8_t bRequest,
+                           uint16_t wValue,
+                           uint16_t wIndex,
+                           unsigned char *data,
+                           uint16_t wLength,
+                           unsigned int timeout_ms,
+                           usb_ctrl_transfer_diag_t *diag)
+{
+    struct libusb_transfer *transfer;
+    struct timeval tv;
+    unsigned char *buf;
+    int completed = 0;
+    int cancelled = 0;
+    int submit_ret;
+    int ret;
+    unsigned iter = 0;
+    const unsigned max_iter = 100;
+
+    if (diag)
+        memset(diag, 0, sizeof(*diag));
+
+    if (!dev)
+        return LIBUSB_ERROR_INVALID_PARAM;
+
+    transfer = libusb_alloc_transfer(0);
+    if (!transfer)
+        return LIBUSB_ERROR_NO_MEM;
+
+    buf = malloc(LIBUSB_CONTROL_SETUP_SIZE + wLength);
+    if (!buf) {
+        libusb_free_transfer(transfer);
+        return LIBUSB_ERROR_NO_MEM;
+    }
+
+    if ((bmRequestType & LIBUSB_ENDPOINT_IN) == 0 && data && wLength > 0)
+        memcpy(buf + LIBUSB_CONTROL_SETUP_SIZE, data, wLength);
+
+    libusb_fill_control_setup(buf, bmRequestType, bRequest,
+                              wValue, wIndex, wLength);
+    libusb_fill_control_transfer(transfer, dev, buf, usb_async_completed_cb,
+                                 &completed, timeout_ms);
+
+    submit_ret = libusb_submit_transfer(transfer);
+    if (diag)
+        diag->submit_ret = submit_ret;
+    if (submit_ret != LIBUSB_SUCCESS) {
+        free(buf);
+        libusb_free_transfer(transfer);
+        return submit_ret;
+    }
+
+    tv.tv_sec = (long)(timeout_ms / 1000);
+    tv.tv_usec = (long)((timeout_ms % 1000) * 1000);
+    ret = libusb_handle_events_timeout_completed(g_usb_event_ctx, &tv,
+                                                 &completed);
+    if (ret != LIBUSB_SUCCESS && completed == 0) {
+        libusb_cancel_transfer(transfer);
+        cancelled = 1;
+    }
+
+    if (completed == 0) {
+        libusb_cancel_transfer(transfer);
+        cancelled = 1;
+    }
+
+    while (completed == 0 && iter < max_iter) {
+        tv.tv_sec = 0;
+        tv.tv_usec = 2000;
+        ret = libusb_handle_events_timeout_completed(g_usb_event_ctx, &tv,
+                                                     &completed);
+        if (ret != LIBUSB_SUCCESS)
+            break;
+        iter++;
+    }
+
+    if (diag) {
+        diag->status = transfer->status;
+        diag->actual_length = transfer->actual_length;
+        diag->completed = completed;
+        diag->cancelled = cancelled;
+    }
+
+    if (completed == 0) {
+        ret = LIBUSB_ERROR_TIMEOUT;
+    } else {
+        switch (transfer->status) {
+        case LIBUSB_TRANSFER_COMPLETED:
+            ret = transfer->actual_length;
+            break;
+        case LIBUSB_TRANSFER_STALL:
+            ret = LIBUSB_ERROR_PIPE;
+            break;
+        case LIBUSB_TRANSFER_TIMED_OUT:
+            ret = LIBUSB_ERROR_TIMEOUT;
+            break;
+        case LIBUSB_TRANSFER_CANCELLED:
+            ret = LIBUSB_ERROR_TIMEOUT;
+            break;
+        case LIBUSB_TRANSFER_NO_DEVICE:
+            ret = LIBUSB_ERROR_NO_DEVICE;
+            break;
+        case LIBUSB_TRANSFER_OVERFLOW:
+            ret = LIBUSB_ERROR_OVERFLOW;
+            break;
+        default:
+            ret = LIBUSB_ERROR_IO;
+            break;
+        }
+    }
+
+    if (diag)
+        diag->result = ret;
+
+    free(buf);
+    libusb_free_transfer(transfer);
+    return ret;
+}
+
 int usb_ctrl_transfer_async_abort(libusb_device_handle *dev,
                                   uint8_t bmRequestType,
                                   uint8_t bRequest,

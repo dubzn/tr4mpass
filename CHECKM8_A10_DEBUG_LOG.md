@@ -933,6 +933,36 @@ send_payload_chunks: offset=0 ret=2016    <-- payload entregado sin bus reset
 
 ---
 
+## v1.0.38 — Resultado en hardware (white + black, 2026-05-31 ~23:26–23:28)
+
+**Fallido — `USBDEVFS_RESETEP` no sirve para EP0 en este host/kernel.**
+
+Ambos dispositivos ejecutaron el path gaster, no el King parcial:
+
+```text
+send_overwrite: sending 48 bytes (bmReqType=0x02, bReq=0x03, wIndex=0x80)
+send_overwrite: ret=-9 (Pipe error)
+v1.0.38: USBDEVFS_RESETEP EP0-OUT ret=-1 No such file or directory
+v1.0.38: USBDEVFS_RESETEP EP0-IN  ret=-1 No such file or directory
+v1.0.38: RESETEP failed -- falling back to handle reopen
+```
+
+El resultado fue idéntico en los 3 intentos de `white` y los 3 intentos de `black`:
+- stage 2 OK con guesses Linux `128`, `64`, `0`
+- stage 3 spray path B OK, `checkm8_stall` en 3 intentos, 5 holes OK
+- overwrite STALL esperado OK
+- `USBDEVFS_RESETEP` falla para EP0 OUT/IN con `ENOENT`
+- fallback reopen funciona a nivel handle, pero no limpia el problema
+- payload `DFU_DNLOAD` `2016 B` vuelve a timeoutear en `offset=0` tras `1000 ms`
+- finalize suffix y zero-length DNLOAD también timeoutean
+- serial post-stage4 vuelve limpio, `len=98`, sin `PWND`
+
+**Conclusión:** H1 confirmada. El kernel no expone EP0 como endpoint reseteable vía `USBDEVFS_RESETEP`; el fallback al reopen reproduce `v1.0.36`, y el payload no llega.
+
+**Nota de logging:** `checkm8: stage 4 complete -- payload delivered` es engañoso en este caso. El log correcto previo dice `completion unknown after Operation timed out at offset=0`; no hay evidencia de bytes entregados. Conviene cambiar ese mensaje antes de la próxima prueba.
+
+---
+
 ## Research Correction (2026-06-01)
 
 La hipótesis `USBDEVFS_RESETEP(EP0)` quedó más débil después de revisar documentación y código del kernel Linux.
@@ -957,13 +987,56 @@ Regla para los próximos pasos: probar una hipótesis por vez, con una versión/
 | H4 | El "King path" probado no fue King completo | `v1.0.37` solo cambió request type con overwrite 48 B; King usa overwrite grande + callback chain | Correr binario King upstream en el mismo host/cable; si funciona, portar flujo completo | King muestra `PWND:[checkm8]` o falla igual que tr4mpass |
 | H5 | El problema es host USB/cable/controlador, no tr4mpass | gaster/King reportan sensibilidad a Linux/xHCI, hubs y cables | Correr upstream `gaster pwn` mismo host/puerto/dispositivo | Si gaster falla también: stack host; si gaster pwn: bug nuestro |
 | H6 | El payload no llega realmente sin reset, aunque el código lo trate como "completion unknown" | `v1.0.33/36/37` timeoutean en offset 0 con 1000 ms | `usbmon` o instrumentación de transferencia con `actual_length`/status más cruda | Confirmar si hay DATA stage parcial/completo |
-| H7 | Drift de versión/docs está ensuciando conclusiones | Código actual trae `v1.0.38`, pero logs siguen diciendo `1.0.36`; `COMP_CHANGES.md` quedó en `1.0.33` | Bump de `CHECKM8_EXPLOIT_VERSION` y actualizar docs antes de hardware | Logs identificables por experimento |
+| H7 | Drift de versión/docs está ensuciando conclusiones | `v1.0.38` corrió impreso como `1.0.36`; `COMP_CHANGES.md` estaba viejo | Bump de `CHECKM8_EXPLOIT_VERSION` y actualizar docs antes de hardware | **Hecho en v1.0.39** |
 
 ## Test Plan (one by one)
 
-1. **H7 / higiene primero:** bump real de versión antes de otra corrida y asegurar que el log diga el experimento correcto.
-2. **H1 / `v1.0.38`:** correr `USBDEVFS_RESETEP` en hardware Linux. Resultado esperado: fallo EP0; si funciona, mirar payload inmediatamente.
+1. **H7 / higiene primero:** bump real de versión antes de otra corrida y asegurar que el log diga el experimento correcto. **Hecho en código v1.0.39.**
+2. **H6 / payload actual_length:** correr `v1.0.39` con `CHECKM8_EP0_RECOVERY=none` y mirar `status=... actual=...` del payload DNLOAD.
 3. **H5 / control gaster:** correr upstream `0x7ff/gaster` en el mismo host/cable/puerto.
 4. **H4 / control King:** correr upstream `pgarba/King` en el mismo host/cable/puerto.
 5. **H2/H6 / traza USB:** si gaster/King divergen de tr4mpass, capturar `usbmon` en overwrite→payload para ver si el host emite el `DFU_DNLOAD` DATA stage.
 6. **Port King completo:** solo si King logra `PWND` o muestra una señal USB cualitativamente mejor que gaster/tr4mpass.
+
+## Next Experiment
+
+### v1.0.39 — Payload transfer diagnostic + explicit EP0 recovery mode
+
+**Código aplicado:** 
+- `CHECKM8_EXPLOIT_VERSION` ahora imprime `1.0.39`.
+- `send_payload_chunks()` usa un control transfer async diagnóstico para loguear:
+  - `ret`
+  - `transfer->status`
+  - `transfer->actual_length`
+  - `completed`
+  - `cancelled`
+- El log final ya no dice `payload delivered` cuando hay timeout; dice `payload path attempted`.
+- `CHECKM8_EP0_RECOVERY` permite elegir una sola estrategia por corrida:
+  - unset / `none`: no recuperación EP0, baseline gaster para medir `actual_length`.
+  - `resetep`: intenta `USBDEVFS_RESETEP`, sin fallback automático.
+  - `reopen`: solo close/open handle, reproducción explícita de v1.0.36.
+  - `resetep-reopen`: reproduce v1.0.38 con fallback, si se necesita comparar.
+  - `bus-reset`: reproduce v1.0.34, entrega payload pero probablemente destruye heap.
+
+**Primera prueba recomendada:**
+
+```bash
+unset CHECKM8_EP0_RECOVERY
+sudo ./tr4mpass ...
+```
+
+**Señales a buscar:**
+
+```text
+checkm8_exploit: version 1.0.39
+v1.0.39: EP0 recovery mode 'none'
+send_payload_chunks: offset=0 ret=-7 (...) status=... actual=...
+send_payload_chunks: done -- completion unknown after ... (actual=... status=...)
+```
+
+Interpretación:
+- `actual=0`: el payload no está saliendo/llegando como DATA stage; priorizar `usbmon`, gaster/King control, o host USB.
+- `actual=2016` con timeout/status failure: el DATA stage llegó, pero falla STATUS/ejecución; volver a hipótesis ROP/shellcode/finalize.
+- `actual` parcial: mirar tamaño exacto para inferir si xHCI corta en packet boundary.
+
+**Resultado:** _pendiente de corrida en hardware._
