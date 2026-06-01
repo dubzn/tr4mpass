@@ -87,7 +87,7 @@ int usb_ctrl_transfer_diag(libusb_device_handle *dev,
     struct timeval tv;
     unsigned char *buf;
     int completed = 0;
-    int cancelled = 0;
+    int cancel_requested = 0;
     int submit_ret;
     int ret;
     unsigned iter = 0;
@@ -130,14 +130,9 @@ int usb_ctrl_transfer_diag(libusb_device_handle *dev,
     tv.tv_usec = (long)((timeout_ms % 1000) * 1000);
     ret = libusb_handle_events_timeout_completed(g_usb_event_ctx, &tv,
                                                  &completed);
-    if (ret != LIBUSB_SUCCESS && completed == 0) {
-        libusb_cancel_transfer(transfer);
-        cancelled = 1;
-    }
-
     if (completed == 0) {
         libusb_cancel_transfer(transfer);
-        cancelled = 1;
+        cancel_requested = 1;
     }
 
     while (completed == 0 && iter < max_iter) {
@@ -154,7 +149,7 @@ int usb_ctrl_transfer_diag(libusb_device_handle *dev,
         diag->status = transfer->status;
         diag->actual_length = transfer->actual_length;
         diag->completed = completed;
-        diag->cancelled = cancelled;
+        diag->cancel_requested = cancel_requested;
     }
 
     if (completed == 0) {

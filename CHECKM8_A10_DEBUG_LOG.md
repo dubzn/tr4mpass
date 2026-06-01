@@ -986,17 +986,20 @@ Regla para los próximos pasos: probar una hipótesis por vez, con una versión/
 | H3 | Bus reset entre overwrite y payload libera USB pero destruye heap/overwrite | `v1.0.34` entregó payload+finalize, pero serial limpio y addr sin reset de shellcode | No repetir como solución; usarlo solo como control "payload path healthy" | Payload `ret=2016`, finalize OK, sin PWND |
 | H4 | El "King path" probado no fue King completo | `v1.0.37` solo cambió request type con overwrite 48 B; King usa overwrite grande + callback chain | Correr binario King upstream en el mismo host/cable; si funciona, portar flujo completo | King muestra `PWND:[checkm8]` o falla igual que tr4mpass |
 | H5 | El problema es host USB/cable/controlador, no tr4mpass | gaster/King reportan sensibilidad a Linux/xHCI, hubs y cables | Correr upstream `gaster pwn` mismo host/puerto/dispositivo | Si gaster falla también: stack host; si gaster pwn: bug nuestro |
-| H6 | El payload no llega realmente sin reset, aunque el código lo trate como "completion unknown" | `v1.0.33/36/37` timeoutean en offset 0 con 1000 ms | `usbmon` o instrumentación de transferencia con `actual_length`/status más cruda | Confirmar si hay DATA stage parcial/completo |
+| H6 | El payload DATA stage puede llegar aunque libusb devuelva timeout | `v1.0.39`: `actual=2016` en 5/6 intentos; `actual=128` en 1/6 | Mantener diagnóstico `actual_length`; si hace falta, confirmar con `usbmon` | DATA completo pero STATUS timeout desplaza el problema a ejecución/finalize |
 | H7 | Drift de versión/docs está ensuciando conclusiones | `v1.0.38` corrió impreso como `1.0.36`; `COMP_CHANGES.md` estaba viejo | Bump de `CHECKM8_EXPLOIT_VERSION` y actualizar docs antes de hardware | **Hecho en v1.0.39** |
+| H8 | El finalize DFU o el timing post-payload perturba ejecución/observación | `actual=2016` pero suffix/zlen fallan y serial vuelve limpio | `v1.0.40`: `CHECKM8_FINALIZE_MODE=skip`; luego delay post-payload | Si PWND aparece, finalize/timing era parte del bloqueo |
 
 ## Test Plan (one by one)
 
 1. **H7 / higiene primero:** bump real de versión antes de otra corrida y asegurar que el log diga el experimento correcto. **Hecho en código v1.0.39.**
-2. **H6 / payload actual_length:** correr `v1.0.39` con `CHECKM8_EP0_RECOVERY=none` y mirar `status=... actual=...` del payload DNLOAD.
-3. **H5 / control gaster:** correr upstream `0x7ff/gaster` en el mismo host/cable/puerto.
-4. **H4 / control King:** correr upstream `pgarba/King` en el mismo host/cable/puerto.
-5. **H2/H6 / traza USB:** si gaster/King divergen de tr4mpass, capturar `usbmon` en overwrite→payload para ver si el host emite el `DFU_DNLOAD` DATA stage.
-6. **Port King completo:** solo si King logra `PWND` o muestra una señal USB cualitativamente mejor que gaster/tr4mpass.
+2. **H6 / payload actual_length:** correr `v1.0.39` con `CHECKM8_EP0_RECOVERY=none` y mirar `status=... actual=...` del payload DNLOAD. **Hecho: 5/6 con `actual=2016`, 1/6 parcial `128`.**
+3. **H8 / finalize/timing:** correr `v1.0.40` con `CHECKM8_FINALIZE_MODE=skip`, sin otro cambio.
+4. **H8 / delay:** si sigue limpio, repetir con `CHECKM8_POST_PAYLOAD_DELAY_MS=500`.
+5. **H5 / control gaster:** correr upstream `0x7ff/gaster` en el mismo host/cable/puerto.
+6. **H4 / control King:** correr upstream `pgarba/King` en el mismo host/cable/puerto.
+7. **H2/H6 / traza USB:** si gaster/King divergen de tr4mpass, capturar `usbmon` en overwrite→payload para ver STATUS/finalize/reset.
+8. **Port King completo:** solo si King logra `PWND` o muestra una señal USB cualitativamente mejor que gaster/tr4mpass.
 
 ## Next Experiment
 
@@ -1009,7 +1012,7 @@ Regla para los próximos pasos: probar una hipótesis por vez, con una versión/
   - `transfer->status`
   - `transfer->actual_length`
   - `completed`
-  - `cancelled`
+  - `cancelled` (`v1.0.40` lo renombra a `cancel_requested` para evitar confusión)
 - El log final ya no dice `payload delivered` cuando hay timeout; dice `payload path attempted`.
 - `CHECKM8_EP0_RECOVERY` permite elegir una sola estrategia por corrida:
   - unset / `none`: no recuperación EP0, baseline gaster para medir `actual_length`.
@@ -1039,4 +1042,55 @@ Interpretación:
 - `actual=2016` con timeout/status failure: el DATA stage llegó, pero falla STATUS/ejecución; volver a hipótesis ROP/shellcode/finalize.
 - `actual` parcial: mirar tamaño exacto para inferir si xHCI corta en packet boundary.
 
-**Resultado:** _pendiente de corrida en hardware._
+**Resultado con logs actualizados (`src/log_white.txt`, `src/log_black.txt`):**
+
+No hubo `PWND`, pero sí obtuvimos una señal nueva y valiosa:
+
+- `white`: los 3 intentos llegaron a stage 4 con `actual=2016` en el payload DNLOAD.
+- `black`: intento 1 quedó parcial en `actual=128`; intentos 2 y 3 llegaron a `actual=2016`.
+- En todos los casos el resultado libusb siguió siendo `ret=-7 (Operation timed out)` y `status=TIMED_OUT`.
+- Finalize siguió fallando: suffix/zero-length DNLOAD timeoutean o, en el primer intento de `black`, suffix da `Pipe error`.
+- Después del reset post-stage4 el serial vuelve limpio, `len=98`, sin `PWND`.
+
+**Lectura:** H6 cambia de forma. Ya no parece correcto decir que el payload "no llega" en general: en 5/6 intentos el DATA stage reportó `actual=2016`. El problema queda después de transferir DATA: STATUS phase/finalize, ejecución ROP/shellcode, o reset/observación del `PWND`.
+
+**Nota de logging:** `cancelled=1` en este diagnóstico significa que el host pidió cancelar tras vencer el timeout de espera; no niega `actual=2016`. En `v1.0.40` el campo se llama `cancel_requested`.
+
+## Next Experiment
+
+### v1.0.40 — Separate payload DATA from DFU finalize/reset timing
+
+**Hipótesis nueva:** después de `actual=2016`, el suffix/zero-length finalize inmediato podría estar perturbando una ejecución que ya recibió el payload, o simplemente agregando ruido antes del reset. Queremos aislarlo sin volver al loop de `RESETEP`/reopen.
+
+**Código aplicado:**
+- `CHECKM8_EXPLOIT_VERSION` imprime `1.0.40`.
+- El log diagnóstico de payload ahora muestra `submit=...` y `cancel_requested=...`.
+- `CHECKM8_FINALIZE_MODE`:
+  - `gaster` (default): conserva suffix + zero-length + status polls acotados.
+  - `skip`: no envía finalize después del payload.
+- `CHECKM8_POST_PAYLOAD_DELAY_MS`:
+  - default `0`.
+  - si se define, espera ese tiempo después del payload y antes de finalize/return a reset.
+
+**Prueba recomendada 1, una variable por vez:**
+
+```bash
+unset CHECKM8_EP0_RECOVERY
+unset CHECKM8_PAYLOAD_TIMEOUT_MS
+export CHECKM8_FINALIZE_MODE=skip
+unset CHECKM8_POST_PAYLOAD_DELAY_MS
+sudo ./tr4mpass ...
+```
+
+**Señal esperada:**
+- Si aparece `PWND`, el finalize era dañino o innecesario en nuestro path Linux/A10.
+- Si sigue `actual=2016` + serial limpio, repetir con delay post-payload:
+
+```bash
+unset CHECKM8_PAYLOAD_TIMEOUT_MS
+export CHECKM8_FINALIZE_MODE=skip
+export CHECKM8_POST_PAYLOAD_DELAY_MS=500
+sudo ./tr4mpass ...
+```
+
+Eso separa "no finalizar" de "darle más tiempo a ROP/shellcode antes del bus reset".

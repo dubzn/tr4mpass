@@ -46,7 +46,7 @@ typedef struct {
     int status;
     int actual_length;
     int completed;
-    int cancelled;
+    int cancel_requested;
 } usb_ctrl_transfer_diag_t;
 
 /*
