@@ -1583,4 +1583,73 @@ El black log muestra `usb_timeout=5ms` en stage 2. Debería ser `usb_timeout=50m
 
 **Acción inmediata: implementar Experimento 2 (hex dump del payload) para confirmar layout.**
 
+---
+
+## v1.0.42 — Resultados (2026-06-01 ~11:19-11:20) — ROP layout CONFIRMADO correcto
+
+### El hex dump es el dato más importante hasta ahora:
+
+```
+ROP hdr dump buf[0x00..0x5F]:
+[0x00] 00 00 00 00 00 00 00 00  ← endpoint=0, pad=0
+[0x08] 00 00 00 00 00 00 00 00  ← io_buffer=0
+[0x10] 00 00 00 00 00 00 00 00  ← status=0, io_len=0
+[0x18] 00 00 00 00 00 00 00 00  ← ret_cnt=0, pad_1=0
+[0x20] 4C CC 00 00 01 00 00 00  ← callback = 0x10000CC4C ✅ func_gadget
+[0x28] 10 00 0B 80 01 00 00 00  ← next     = 0x1800B0010 (slot 0 chain ptr)
+[0x30] 4C CC 00 00 01 00 00 00  ← func_gadget slot 1
+[0x38] 20 00 0B 80 01 00 00 00  ← next slot 1
+[0x40] 4C CC 00 00 01 00 00 00  ← func_gadget slot 2
+[0x48] 30 00 0B 80 01 00 00 00  ← next slot 2
+...
+```
+
+`buf[0x20]=0x10000CC4C` == `func_gadget` ✅ PERFECTO. El layout del ROP es idéntico a gaster.
+
+**Conclusión del hex dump:** El ROP chain está ensamblado correctamente. El problema NO es el layout del buffer. El `func_gadget` recibe la ejecución pero algo falla cuando intenta despachar a `write_ttbr0`.
+
+### Nuevo fallo en black intento 3: `checkm8_stall: exceeded 100 retries`
+
+```
+checkm8_stall: exceeded 100 retries, giving up
+checkm8_exploit: attempt 3 failed, retrying...
+```
+
+El stall en stage 3 falló en el tercer intento del black. Esto es un síntoma de que el heap está en mal estado después de intentos anteriores. La acumulación de USB resets degrada el estado del BootROM en memoria.
+
+### Dato nuevo: el BLACK pierde la USB addr entre stage3 y stage4 TAMBIÉN
+
+```
+[black attempt 1] stage3: addr 22 → stage4: addr 23  (reset entre stages)
+[black attempt 2] stage3: addr 23 → stage4: addr 24
+```
+
+Igual que en el white. Ambos devices hacen un reset espontáneo al final de stage 3. Esto ocurría en v1.0.40 en el white pero ahora también ocurre en el black con el nuevo usb_timeout=50ms. El cambio de 5ms → 50ms puede estar afectando el timing del stage 3 reset.
+
+### Estado del diagnóstico
+
+| Componente | Estado |
+|-----------|--------|
+| UAF trigger (stage 2) | ✅ siempre funciona |
+| Heap spray (stage 3) | ✅ funciona (excepto 3er intento degradado) |
+| Overwrite STALL | ✅ siempre STALL correcto |
+| Payload entregado | ✅ `actual=2016 completed=1` siempre |
+| ROP layout en memoria | ✅ CONFIRMADO correcto via hex dump |
+| `func_gadget` en `buf[0x20]` | ✅ `0x10000CC4C` ✅ |
+| `func_gadget` despacha a `write_ttbr0` | ❓ DESCONOCIDO — investigando |
+| Serial PWND | ❌ |
+
+### Hipótesis actual más probable: func_gadget no puede leer sus args
+
+El `func_gadget` en `0x10000CC4C` es llamado por el BootROM cuando procesa el struct en `insecure_memory_base`. El gadget necesita leer el par `(arg, func)` de `buf[0x70..0x7F]` (que contiene `arg=insecure_memory_base` y `func=write_ttbr0`). 
+
+El gadget lee estos valores de un **offset fijo relativo a algún registro** — probablemente x19 o x20 que el BootROM usa para pasar la dirección del DFU callback struct. Si ese registro apunta a `0x1800B0000`, entonces:
+- `arg` = `*(x19 + 0x70)` = `buf[0x70]` = `0x1800B0000` ✅
+- `func` = `*(x19 + 0x78)` = `buf[0x78]` = `0x1000003E4` ✅
+
+Pero si el BootROM pasa el struct pointer en un registro diferente, o en un offset distinto, el gadget leería basura.
+
+**→ Investigando con research agent lanzado en paralelo.**
+
+
 
