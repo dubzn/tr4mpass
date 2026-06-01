@@ -17,251 +17,265 @@
   DFU Mode:         YES
 -------------------------
 
-13:21:18 [INFO] [bypass] Registered module: path_a_checkm8
-13:21:18 [INFO] [bypass] Registered module: path_b_a12plus
-13:21:18 [INFO] [bypass] 2 registered module(s):
-13:21:18 [INFO]   [0] path_a_checkm8 -- A5-A11 bypass via checkm8 BootROM exploit + jailbreak + activation
-13:21:18 [INFO]   [1] path_b_a12plus -- A12+ bypass via identity manipulation + session activation
-13:21:18 [INFO] path_a: device is eligible (checkm8-vulnerable, DFU mode)
-13:21:18 [INFO] [bypass] Selected module: path_a_checkm8
-13:21:18 [INFO] Auto-selected module: path_a_checkm8
-13:21:18 [INFO] Executing module: path_a_checkm8
-13:21:18 [INFO] [bypass] Executing module: path_a_checkm8
-13:21:18 [INFO] path_a: === Starting A5-A11 bypass for  ===
-13:21:18 [INFO] path_a: [1/8] Delivering checkm8 exploit
-13:21:18 [INFO] checkm8_exploit: version 1.0.36
-13:21:18 [INFO] checkm8_exploit: starting exploit on CPID 0x8010 (usb_timeout=5 ms, payload_timeout=1000 ms)
-13:21:18 [INFO] checkm8_exploit: Linux A10 experiment: payload DNLOAD timeout 1000 ms (set CHECKM8_PAYLOAD_TIMEOUT_MS=0 for gaster)
-13:21:18 [INFO] checkm8_exploit: attempt 1/3
-13:21:18 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
-13:21:18 [INFO] exploit_deliver: starting checkm8 on A10 (iBoot-2696)
-13:21:18 [INFO] checkm8: stage 1/4 -- reset DFU state
-13:21:18 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
-13:21:19 [INFO] checkm8: waiting for USB re-enumeration...
-13:21:19 [INFO] DFU device found (bus 3, addr 123)
-13:21:19 [INFO] checkm8: USB handle re-acquired (bus reset OK)
-13:21:19 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=5 ms)
-13:21:19 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=4 ms)
-13:21:19 [INFO] checkm8: [Linux xHCI] Cancelled! Guessing sent=128 (to prevent crash)
-13:21:19 [INFO] checkm8: stage 2 complete -- UAF triggered (sent=128, pad=1344)
-13:21:19 [INFO] checkm8: waiting for USB re-enumeration...
-13:21:19 [INFO] DFU device found (bus 3, addr 123)
-13:21:19 [INFO] checkm8: USB handle re-acquired (bus reset OK)
-13:21:19 [INFO] checkm8: stage 3/4 -- heap spray
-13:21:19 [INFO] checkm8_stage_spray: path B (holes=5)
-13:21:19 [INFO] checkm8_stall: success (attempts=3 ret=0 abort=0 ms)
-13:21:19 [INFO] checkm8_stage_spray: no_leak hole 1/5 OK (attempts=1)
-13:21:19 [INFO] checkm8_stage_spray: no_leak hole 2/5 OK (attempts=1)
-13:21:19 [INFO] checkm8_stage_spray: no_leak hole 3/5 OK (attempts=1)
-13:21:19 [INFO] checkm8_stage_spray: no_leak hole 4/5 OK (attempts=1)
-13:21:19 [INFO] checkm8_stage_spray: no_leak hole 5/5 OK (attempts=1)
-13:21:19 [INFO] checkm8_stage_spray: final leak/no_leak OK (attempts=1)
-13:21:19 [INFO] checkm8: stage 3 complete -- heap spray done
-13:21:19 [INFO] checkm8: waiting for USB re-enumeration...
-libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/123, errno=19
-13:21:19 [ERROR] failed to open DFU device: Input/Output Error
-13:21:19 [INFO] DFU device found (bus 3, addr 124)
-13:21:19 [INFO] checkm8: USB handle re-acquired (bus reset OK)
-13:21:19 [INFO] checkm8: stage 4/4 -- overwrite with payload
-13:21:19 [INFO] assemble_payload: notA9 variant: data=2016 transfer=2016 pad=0 (rop_prefix=1552 main=120 cfg=96 handle=192+56) CPID 0x8010
-13:21:19 [INFO] assemble_payload: payload_dest=0x1800AFF08 payload_off=216 payload_sz=248
-13:21:19 [INFO] assemble_payload: memcpy=0x100010730 gUSBSN=0x180083CF8 patch=0x1020074AC bus_reset=0x180088B78
-13:21:19 [INFO] assemble_payload: exec_addr=0x1820B0610 write_ttbr0=0x1000003E4 tlbi=0x100000434
-13:21:19 [INFO] checkm8: [stage4] chip CPID=0x8010 has_tlbi=1
-13:21:19 [INFO] checkm8: [stage4] insecure_memory_base=0x1800B0000 nop_gadget=0x10000CC6C
-13:21:19 [INFO] checkm8: [stage4] A10/notA9 path: stall+leak before overwrite
-13:21:19 [INFO] checkm8: [stage4] pre-overwrite stall OK
-13:21:19 [INFO] checkm8: [stage4] pre-overwrite leak OK
-13:21:19 [INFO] build_overwrite_64: io_buffer=0x0 io_len=0x0 callback=0x10000CC6C (nop) next=0x1800B0000 (insecure_mem)
-13:21:19 [INFO] checkm8: [stage4] sending ARM64 overwrite (48 bytes)
-13:21:19 [INFO] checkm8: [stage4] send_overwrite: sending 48 bytes (bmReqType=0x02, bReq=0x03, wIndex=0x80)
-13:21:19 [INFO] checkm8: [stage4] send_overwrite: ret=-9 (Pipe error)
-13:21:19 [INFO] checkm8: [stage4] send_overwrite: STALL received (expected) -- overwrite landed in freed io_buffer
-13:21:19 [INFO] checkm8: [stage4] overwrite OK -- proceeding to payload send
-13:21:19 [INFO] checkm8: [stage4] v1.0.36: reopen handle on same addr to clear host-side EP0 HALT...
-13:21:19 [INFO] checkm8: [stage4] v1.0.36: handle reopened (same device, no bus reset) -- overwrite preserved
-13:21:19 [INFO] checkm8: [stage4] send_payload_chunks: sending 2016 bytes total (timeout=1000 ms)
-13:21:19 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 chunk=2016
-13:21:20 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 ret=-7 (Operation timed out)
-13:21:20 [WARN] checkm8: [stage4] send_payload_chunks: offset=0 got Operation timed out -- transfer completion unknown, payload may be executing (treating as OK)
-13:21:20 [INFO] checkm8: [stage4] send_payload_chunks: done -- completion unknown after Operation timed out at offset=0 (requested 2016 bytes total)
-13:21:20 [INFO] checkm8: [stage4] finalizing DFU transfer
-13:21:20 [WARN] send_dfu_finalize: suffix send failed: Operation timed out
-13:21:20 [WARN] send_dfu_finalize: zero-length send failed: Operation timed out
-13:21:20 [INFO] send_dfu_finalize: skipping status polls (finalize DNLOAD failed)
-13:21:20 [INFO] checkm8: stage 4 complete -- payload delivered
-13:21:20 [INFO] exploit_deliver: all stages complete
-13:21:20 [INFO] checkm8_exploit: stage 4 done -- waiting 250 ms before USB bus reset...
-13:21:21 [INFO] checkm8_exploit: triggering USB bus reset to clear EP0...
-13:21:21 [INFO] checkm8: waiting for USB re-enumeration...
-13:21:21 [INFO] DFU device found (bus 3, addr 124)
-13:21:21 [INFO] checkm8: USB handle re-acquired (bus reset OK)
-13:21:21 [INFO] CPID: 0x8010
-13:21:21 [INFO] ECID: 0x0018792134908026
-13:21:21 [INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:0018792134908026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
-13:21:21 [INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
-13:21:21 [WARN] checkm8_verify_pwned: PWND marker not found in serial
-13:21:21 [WARN] checkm8_exploit: not pwned after attempt 1
-13:21:21 [INFO] checkm8_exploit: waiting for device reset...
-13:21:23 [INFO] DFU device found (bus 3, addr 124)
-13:21:23 [INFO] checkm8_exploit: USB handle re-acquired for retry 2
-13:21:23 [INFO] CPID: 0x8010
-13:21:23 [INFO] ECID: 0x0018792134908026
-13:21:23 [INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:0018792134908026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
-13:21:23 [INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
-13:21:23 [WARN] checkm8_verify_pwned: PWND marker not found in serial
-13:21:23 [INFO] checkm8_exploit: not yet PWND, running attempt 2
-13:21:23 [INFO] checkm8_exploit: attempt 2/3
-13:21:23 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
-13:21:23 [INFO] exploit_deliver: starting checkm8 on A10 (iBoot-2696)
-13:21:23 [INFO] checkm8: stage 1/4 -- reset DFU state
-13:21:23 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
-13:21:23 [INFO] checkm8: waiting for USB re-enumeration...
-13:21:23 [INFO] DFU device found (bus 3, addr 124)
-13:21:23 [INFO] checkm8: USB handle re-acquired (bus reset OK)
-13:21:23 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=5 ms)
-13:21:23 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=4 ms)
-13:21:23 [INFO] checkm8: [Linux xHCI] Cancelled! Guessing sent=64 (to prevent crash)
-13:21:23 [INFO] checkm8: stage 2 complete -- UAF triggered (sent=64, pad=1408)
-13:21:23 [INFO] checkm8: waiting for USB re-enumeration...
-13:21:23 [INFO] DFU device found (bus 3, addr 124)
-13:21:23 [INFO] checkm8: USB handle re-acquired (bus reset OK)
-13:21:23 [INFO] checkm8: stage 3/4 -- heap spray
-13:21:23 [INFO] checkm8_stage_spray: path B (holes=5)
-13:21:23 [INFO] checkm8_stall: success (attempts=3 ret=0 abort=0 ms)
-13:21:23 [INFO] checkm8_stage_spray: no_leak hole 1/5 OK (attempts=1)
-13:21:23 [INFO] checkm8_stage_spray: no_leak hole 2/5 OK (attempts=1)
-13:21:23 [INFO] checkm8_stage_spray: no_leak hole 3/5 OK (attempts=1)
-13:21:23 [INFO] checkm8_stage_spray: no_leak hole 4/5 OK (attempts=1)
-13:21:23 [INFO] checkm8_stage_spray: no_leak hole 5/5 OK (attempts=1)
-13:21:23 [INFO] checkm8_stage_spray: final leak/no_leak OK (attempts=1)
-13:21:23 [INFO] checkm8: stage 3 complete -- heap spray done
-13:21:23 [INFO] checkm8: waiting for USB re-enumeration...
-libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/124, errno=19
-13:21:23 [ERROR] failed to open DFU device: Input/Output Error
+23:28:21 [INFO] [bypass] Registered module: path_a_checkm8
+23:28:21 [INFO] [bypass] Registered module: path_b_a12plus
+23:28:21 [INFO] [bypass] 2 registered module(s):
+23:28:21 [INFO]   [0] path_a_checkm8 -- A5-A11 bypass via checkm8 BootROM exploit + jailbreak + activation
+23:28:21 [INFO]   [1] path_b_a12plus -- A12+ bypass via identity manipulation + session activation
+23:28:21 [INFO] path_a: device is eligible (checkm8-vulnerable, DFU mode)
+23:28:21 [INFO] [bypass] Selected module: path_a_checkm8
+23:28:21 [INFO] Auto-selected module: path_a_checkm8
+23:28:21 [INFO] Executing module: path_a_checkm8
+23:28:21 [INFO] [bypass] Executing module: path_a_checkm8
+23:28:21 [INFO] path_a: === Starting A5-A11 bypass for  ===
+23:28:21 [INFO] path_a: [1/8] Delivering checkm8 exploit
+23:28:21 [INFO] checkm8_exploit: version 1.0.36
+23:28:21 [INFO] checkm8_exploit: starting exploit on CPID 0x8010 (usb_timeout=5 ms, payload_timeout=1000 ms)
+23:28:21 [INFO] checkm8_exploit: Linux A10 experiment: payload DNLOAD timeout 1000 ms (set CHECKM8_PAYLOAD_TIMEOUT_MS=0 for gaster)
+23:28:21 [INFO] checkm8_exploit: attempt 1/3
+23:28:21 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
+23:28:21 [INFO] exploit_deliver: starting checkm8 on A10 (iBoot-2696)
+23:28:21 [INFO] checkm8: stage 1/4 -- reset DFU state
+23:28:21 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
+23:28:21 [INFO] checkm8: waiting for USB re-enumeration...
+23:28:21 [INFO] DFU device found (bus 3, addr 25)
+23:28:21 [INFO] checkm8: USB handle re-acquired (bus reset OK)
+23:28:21 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=5 ms)
+23:28:21 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=4 ms)
+23:28:21 [INFO] checkm8: [Linux xHCI] Cancelled! Guessing sent=128 (to prevent crash)
+23:28:21 [INFO] checkm8: stage 2 complete -- UAF triggered (sent=128, pad=1344)
+23:28:22 [INFO] checkm8: waiting for USB re-enumeration...
+23:28:22 [INFO] DFU device found (bus 3, addr 25)
+23:28:22 [INFO] checkm8: USB handle re-acquired (bus reset OK)
+23:28:22 [INFO] checkm8: stage 3/4 -- heap spray
+23:28:22 [INFO] checkm8_stage_spray: path B (holes=5)
+23:28:22 [INFO] checkm8_stall: success (attempts=3 ret=0 abort=0 ms)
+23:28:22 [INFO] checkm8_stage_spray: no_leak hole 1/5 OK (attempts=1)
+23:28:22 [INFO] checkm8_stage_spray: no_leak hole 2/5 OK (attempts=1)
+23:28:22 [INFO] checkm8_stage_spray: no_leak hole 3/5 OK (attempts=1)
+23:28:22 [INFO] checkm8_stage_spray: no_leak hole 4/5 OK (attempts=1)
+23:28:22 [INFO] checkm8_stage_spray: no_leak hole 5/5 OK (attempts=1)
+23:28:22 [INFO] checkm8_stage_spray: final leak/no_leak OK (attempts=1)
+23:28:22 [INFO] checkm8: stage 3 complete -- heap spray done
+23:28:22 [INFO] checkm8: waiting for USB re-enumeration...
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/025, errno=19
+23:28:22 [ERROR] failed to open DFU device: Input/Output Error
 libusb: error [get_usbfs_fd] File doesn't exist, wait 10 ms and try again
-libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/124, errno=2
-13:21:23 [ERROR] failed to open DFU device: No such device (it may have been disconnected)
-13:21:24 [INFO] DFU device found (bus 3, addr 125)
-13:21:24 [INFO] checkm8: USB handle re-acquired (bus reset OK)
-13:21:24 [INFO] checkm8: stage 4/4 -- overwrite with payload
-13:21:24 [INFO] assemble_payload: notA9 variant: data=2016 transfer=2016 pad=0 (rop_prefix=1552 main=120 cfg=96 handle=192+56) CPID 0x8010
-13:21:24 [INFO] assemble_payload: payload_dest=0x1800AFF08 payload_off=216 payload_sz=248
-13:21:24 [INFO] assemble_payload: memcpy=0x100010730 gUSBSN=0x180083CF8 patch=0x1020074AC bus_reset=0x180088B78
-13:21:24 [INFO] assemble_payload: exec_addr=0x1820B0610 write_ttbr0=0x1000003E4 tlbi=0x100000434
-13:21:24 [INFO] checkm8: [stage4] chip CPID=0x8010 has_tlbi=1
-13:21:24 [INFO] checkm8: [stage4] insecure_memory_base=0x1800B0000 nop_gadget=0x10000CC6C
-13:21:24 [INFO] checkm8: [stage4] A10/notA9 path: stall+leak before overwrite
-13:21:24 [INFO] checkm8: [stage4] pre-overwrite stall OK
-13:21:24 [INFO] checkm8: [stage4] pre-overwrite leak OK
-13:21:24 [INFO] build_overwrite_64: io_buffer=0x0 io_len=0x0 callback=0x10000CC6C (nop) next=0x1800B0000 (insecure_mem)
-13:21:24 [INFO] checkm8: [stage4] sending ARM64 overwrite (48 bytes)
-13:21:24 [INFO] checkm8: [stage4] send_overwrite: sending 48 bytes (bmReqType=0x02, bReq=0x03, wIndex=0x80)
-13:21:24 [INFO] checkm8: [stage4] send_overwrite: ret=-9 (Pipe error)
-13:21:24 [INFO] checkm8: [stage4] send_overwrite: STALL received (expected) -- overwrite landed in freed io_buffer
-13:21:24 [INFO] checkm8: [stage4] overwrite OK -- proceeding to payload send
-13:21:24 [INFO] checkm8: [stage4] v1.0.36: reopen handle on same addr to clear host-side EP0 HALT...
-13:21:24 [INFO] checkm8: [stage4] v1.0.36: handle reopened (same device, no bus reset) -- overwrite preserved
-13:21:24 [INFO] checkm8: [stage4] send_payload_chunks: sending 2016 bytes total (timeout=1000 ms)
-13:21:24 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 chunk=2016
-13:21:25 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 ret=-7 (Operation timed out)
-13:21:25 [WARN] checkm8: [stage4] send_payload_chunks: offset=0 got Operation timed out -- transfer completion unknown, payload may be executing (treating as OK)
-13:21:25 [INFO] checkm8: [stage4] send_payload_chunks: done -- completion unknown after Operation timed out at offset=0 (requested 2016 bytes total)
-13:21:25 [INFO] checkm8: [stage4] finalizing DFU transfer
-13:21:25 [WARN] send_dfu_finalize: suffix send failed: Operation timed out
-13:21:25 [WARN] send_dfu_finalize: zero-length send failed: Operation timed out
-13:21:25 [INFO] send_dfu_finalize: skipping status polls (finalize DNLOAD failed)
-13:21:25 [INFO] checkm8: stage 4 complete -- payload delivered
-13:21:25 [INFO] exploit_deliver: all stages complete
-13:21:25 [INFO] checkm8_exploit: stage 4 done -- waiting 250 ms before USB bus reset...
-13:21:25 [INFO] checkm8_exploit: triggering USB bus reset to clear EP0...
-13:21:25 [INFO] checkm8: waiting for USB re-enumeration...
-13:21:25 [INFO] DFU device found (bus 3, addr 125)
-13:21:25 [INFO] checkm8: USB handle re-acquired (bus reset OK)
-13:21:25 [INFO] CPID: 0x8010
-13:21:25 [INFO] ECID: 0x0018792134908026
-13:21:25 [INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:0018792134908026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
-13:21:25 [INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
-13:21:25 [WARN] checkm8_verify_pwned: PWND marker not found in serial
-13:21:25 [WARN] checkm8_exploit: not pwned after attempt 2
-13:21:25 [INFO] checkm8_exploit: waiting for device reset...
-13:21:27 [INFO] DFU device found (bus 3, addr 125)
-13:21:27 [INFO] checkm8_exploit: USB handle re-acquired for retry 3
-13:21:27 [INFO] CPID: 0x8010
-13:21:27 [INFO] ECID: 0x0018792134908026
-13:21:27 [INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:0018792134908026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
-13:21:27 [INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
-13:21:27 [WARN] checkm8_verify_pwned: PWND marker not found in serial
-13:21:27 [INFO] checkm8_exploit: not yet PWND, running attempt 3
-13:21:27 [INFO] checkm8_exploit: attempt 3/3
-13:21:27 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
-13:21:27 [INFO] exploit_deliver: starting checkm8 on A10 (iBoot-2696)
-13:21:27 [INFO] checkm8: stage 1/4 -- reset DFU state
-13:21:27 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
-13:21:27 [INFO] checkm8: waiting for USB re-enumeration...
-13:21:27 [INFO] DFU device found (bus 3, addr 125)
-13:21:27 [INFO] checkm8: USB handle re-acquired (bus reset OK)
-13:21:27 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=5 ms)
-13:21:27 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=4 ms)
-13:21:27 [INFO] checkm8: [Linux xHCI] Cancelled! Guessing sent=0 (to prevent crash)
-13:21:27 [INFO] checkm8: stage 2 complete -- UAF triggered (sent=0, pad=1472)
-13:21:28 [INFO] checkm8: waiting for USB re-enumeration...
-13:21:28 [INFO] DFU device found (bus 3, addr 125)
-13:21:28 [INFO] checkm8: USB handle re-acquired (bus reset OK)
-13:21:28 [INFO] checkm8: stage 3/4 -- heap spray
-13:21:28 [INFO] checkm8_stage_spray: path B (holes=5)
-13:21:28 [INFO] checkm8_stall: success (attempts=3 ret=0 abort=0 ms)
-13:21:28 [INFO] checkm8_stage_spray: no_leak hole 1/5 OK (attempts=1)
-13:21:28 [INFO] checkm8_stage_spray: no_leak hole 2/5 OK (attempts=1)
-13:21:28 [INFO] checkm8_stage_spray: no_leak hole 3/5 OK (attempts=1)
-13:21:28 [INFO] checkm8_stage_spray: no_leak hole 4/5 OK (attempts=1)
-13:21:28 [INFO] checkm8_stage_spray: no_leak hole 5/5 OK (attempts=1)
-13:21:28 [INFO] checkm8_stage_spray: final leak/no_leak OK (attempts=1)
-13:21:28 [INFO] checkm8: stage 3 complete -- heap spray done
-13:21:28 [INFO] checkm8: waiting for USB re-enumeration...
-13:21:28 [INFO] DFU device found (bus 3, addr 125)
-13:21:28 [INFO] checkm8: USB handle re-acquired (bus reset OK)
-13:21:28 [INFO] checkm8: stage 4/4 -- overwrite with payload
-13:21:28 [INFO] assemble_payload: notA9 variant: data=2016 transfer=2016 pad=0 (rop_prefix=1552 main=120 cfg=96 handle=192+56) CPID 0x8010
-13:21:28 [INFO] assemble_payload: payload_dest=0x1800AFF08 payload_off=216 payload_sz=248
-13:21:28 [INFO] assemble_payload: memcpy=0x100010730 gUSBSN=0x180083CF8 patch=0x1020074AC bus_reset=0x180088B78
-13:21:28 [INFO] assemble_payload: exec_addr=0x1820B0610 write_ttbr0=0x1000003E4 tlbi=0x100000434
-13:21:28 [INFO] checkm8: [stage4] chip CPID=0x8010 has_tlbi=1
-13:21:28 [INFO] checkm8: [stage4] insecure_memory_base=0x1800B0000 nop_gadget=0x10000CC6C
-13:21:28 [INFO] checkm8: [stage4] A10/notA9 path: stall+leak before overwrite
-13:21:28 [INFO] checkm8: [stage4] pre-overwrite stall OK
-13:21:28 [INFO] checkm8: [stage4] pre-overwrite leak OK
-13:21:28 [INFO] build_overwrite_64: io_buffer=0x0 io_len=0x0 callback=0x10000CC6C (nop) next=0x1800B0000 (insecure_mem)
-13:21:28 [INFO] checkm8: [stage4] sending ARM64 overwrite (48 bytes)
-13:21:28 [INFO] checkm8: [stage4] send_overwrite: sending 48 bytes (bmReqType=0x02, bReq=0x03, wIndex=0x80)
-13:21:28 [INFO] checkm8: [stage4] send_overwrite: ret=-9 (Pipe error)
-13:21:28 [INFO] checkm8: [stage4] send_overwrite: STALL received (expected) -- overwrite landed in freed io_buffer
-13:21:28 [INFO] checkm8: [stage4] overwrite OK -- proceeding to payload send
-13:21:28 [INFO] checkm8: [stage4] v1.0.36: reopen handle on same addr to clear host-side EP0 HALT...
-13:21:28 [INFO] checkm8: [stage4] v1.0.36: handle reopened (same device, no bus reset) -- overwrite preserved
-13:21:28 [INFO] checkm8: [stage4] send_payload_chunks: sending 2016 bytes total (timeout=1000 ms)
-13:21:28 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 chunk=2016
-13:21:29 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 ret=-7 (Operation timed out)
-13:21:29 [WARN] checkm8: [stage4] send_payload_chunks: offset=0 got Operation timed out -- transfer completion unknown, payload may be executing (treating as OK)
-13:21:29 [INFO] checkm8: [stage4] send_payload_chunks: done -- completion unknown after Operation timed out at offset=0 (requested 2016 bytes total)
-13:21:29 [INFO] checkm8: [stage4] finalizing DFU transfer
-13:21:29 [WARN] send_dfu_finalize: suffix send failed: Operation timed out
-13:21:29 [WARN] send_dfu_finalize: zero-length send failed: Operation timed out
-13:21:29 [INFO] send_dfu_finalize: skipping status polls (finalize DNLOAD failed)
-13:21:29 [INFO] checkm8: stage 4 complete -- payload delivered
-13:21:29 [INFO] exploit_deliver: all stages complete
-13:21:29 [INFO] checkm8_exploit: stage 4 done -- waiting 250 ms before USB bus reset...
-13:21:29 [INFO] checkm8_exploit: triggering USB bus reset to clear EP0...
-13:21:30 [INFO] checkm8: waiting for USB re-enumeration...
-13:21:30 [INFO] DFU device found (bus 3, addr 125)
-13:21:30 [INFO] checkm8: USB handle re-acquired (bus reset OK)
-13:21:30 [INFO] CPID: 0x8010
-13:21:30 [INFO] ECID: 0x0018792134908026
-13:21:30 [INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:0018792134908026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
-13:21:30 [INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
-13:21:30 [WARN] checkm8_verify_pwned: PWND marker not found in serial
-13:21:30 [WARN] checkm8_exploit: not pwned after attempt 3
-13:21:30 [ERROR] checkm8_exploit: failed after 3 attempts
-13:21:30 [ERROR] path_a: checkm8 exploit failed
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/025, errno=2
+23:28:22 [ERROR] failed to open DFU device: No such device (it may have been disconnected)
+23:28:22 [INFO] DFU device found (bus 3, addr 26)
+23:28:22 [INFO] checkm8: USB handle re-acquired (bus reset OK)
+23:28:22 [INFO] checkm8: stage 4/4 -- overwrite with payload
+23:28:22 [INFO] assemble_payload: notA9 variant: data=2016 transfer=2016 pad=0 (rop_prefix=1552 main=120 cfg=96 handle=192+56) CPID 0x8010
+23:28:22 [INFO] assemble_payload: payload_dest=0x1800AFF08 payload_off=216 payload_sz=248
+23:28:22 [INFO] assemble_payload: memcpy=0x100010730 gUSBSN=0x180083CF8 patch=0x1020074AC bus_reset=0x180088B78
+23:28:22 [INFO] assemble_payload: exec_addr=0x1820B0610 write_ttbr0=0x1000003E4 tlbi=0x100000434
+23:28:22 [INFO] checkm8: [stage4] chip CPID=0x8010 has_tlbi=1
+23:28:22 [INFO] checkm8: [stage4] insecure_memory_base=0x1800B0000 nop_gadget=0x10000CC6C
+23:28:22 [INFO] checkm8: [stage4] A10/notA9 path: stall+leak before overwrite
+23:28:22 [INFO] checkm8: [stage4] pre-overwrite stall OK
+23:28:22 [INFO] checkm8: [stage4] pre-overwrite leak OK
+23:28:22 [INFO] build_overwrite_64: io_buffer=0x0 io_len=0x0 callback=0x10000CC6C (nop) next=0x1800B0000 (insecure_mem)
+23:28:22 [INFO] checkm8: [stage4] sending ARM64 overwrite (48 bytes)
+23:28:22 [INFO] checkm8: [stage4] send_overwrite: sending 48 bytes (bmReqType=0x02, bReq=0x03, wIndex=0x80)
+23:28:22 [INFO] checkm8: [stage4] send_overwrite: ret=-9 (Pipe error)
+23:28:22 [INFO] checkm8: [stage4] send_overwrite: STALL received (expected) -- overwrite landed in freed io_buffer
+23:28:22 [INFO] checkm8: [stage4] overwrite OK -- proceeding to payload send
+23:28:22 [INFO] checkm8: [stage4] v1.0.38: USBDEVFS_RESETEP EP0-OUT ret=-1 No such file or directory
+23:28:22 [INFO] checkm8: [stage4] v1.0.38: USBDEVFS_RESETEP EP0-IN  ret=-1 No such file or directory
+23:28:22 [WARN] checkm8: [stage4] v1.0.38: RESETEP failed -- falling back to handle reopen
+23:28:22 [INFO] checkm8: [stage4] v1.0.36 fallback: reopen handle on same addr...
+23:28:22 [INFO] checkm8: [stage4] v1.0.36 fallback: handle reopened
+23:28:22 [INFO] checkm8: [stage4] send_payload_chunks: sending 2016 bytes total (timeout=1000 ms)
+23:28:22 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 chunk=2016
+23:28:23 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 ret=-7 (Operation timed out)
+23:28:23 [WARN] checkm8: [stage4] send_payload_chunks: offset=0 got Operation timed out -- transfer completion unknown, payload may be executing (treating as OK)
+23:28:23 [INFO] checkm8: [stage4] send_payload_chunks: done -- completion unknown after Operation timed out at offset=0 (requested 2016 bytes total)
+23:28:23 [INFO] checkm8: [stage4] finalizing DFU transfer
+23:28:23 [WARN] send_dfu_finalize: suffix send failed: Operation timed out
+23:28:23 [WARN] send_dfu_finalize: zero-length send failed: Operation timed out
+23:28:23 [INFO] send_dfu_finalize: skipping status polls (finalize DNLOAD failed)
+23:28:23 [INFO] checkm8: stage 4 complete -- payload delivered
+23:28:23 [INFO] exploit_deliver: all stages complete
+23:28:23 [INFO] checkm8_exploit: stage 4 done -- waiting 250 ms before USB bus reset...
+23:28:23 [INFO] checkm8_exploit: triggering USB bus reset to clear EP0...
+23:28:23 [INFO] checkm8: waiting for USB re-enumeration...
+23:28:23 [INFO] DFU device found (bus 3, addr 26)
+23:28:23 [INFO] checkm8: USB handle re-acquired (bus reset OK)
+23:28:23 [INFO] CPID: 0x8010
+23:28:23 [INFO] ECID: 0x0018792134908026
+23:28:23 [INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:0018792134908026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
+23:28:23 [INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
+23:28:23 [WARN] checkm8_verify_pwned: PWND marker not found in serial
+23:28:23 [WARN] checkm8_exploit: not pwned after attempt 1
+23:28:23 [INFO] checkm8_exploit: waiting for device reset...
+23:28:25 [INFO] DFU device found (bus 3, addr 26)
+23:28:25 [INFO] checkm8_exploit: USB handle re-acquired for retry 2
+23:28:25 [INFO] CPID: 0x8010
+23:28:25 [INFO] ECID: 0x0018792134908026
+23:28:25 [INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:0018792134908026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
+23:28:25 [INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
+23:28:25 [WARN] checkm8_verify_pwned: PWND marker not found in serial
+23:28:25 [INFO] checkm8_exploit: not yet PWND, running attempt 2
+23:28:25 [INFO] checkm8_exploit: attempt 2/3
+23:28:25 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
+23:28:25 [INFO] exploit_deliver: starting checkm8 on A10 (iBoot-2696)
+23:28:25 [INFO] checkm8: stage 1/4 -- reset DFU state
+23:28:25 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
+23:28:26 [INFO] checkm8: waiting for USB re-enumeration...
+23:28:26 [INFO] DFU device found (bus 3, addr 26)
+23:28:26 [INFO] checkm8: USB handle re-acquired (bus reset OK)
+23:28:26 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=5 ms)
+23:28:26 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=4 ms)
+23:28:26 [INFO] checkm8: [Linux xHCI] Cancelled! Guessing sent=64 (to prevent crash)
+23:28:26 [INFO] checkm8: stage 2 complete -- UAF triggered (sent=64, pad=1408)
+23:28:26 [INFO] checkm8: waiting for USB re-enumeration...
+23:28:26 [INFO] DFU device found (bus 3, addr 26)
+23:28:26 [INFO] checkm8: USB handle re-acquired (bus reset OK)
+23:28:26 [INFO] checkm8: stage 3/4 -- heap spray
+23:28:26 [INFO] checkm8_stage_spray: path B (holes=5)
+23:28:26 [INFO] checkm8_stall: success (attempts=3 ret=0 abort=0 ms)
+23:28:26 [INFO] checkm8_stage_spray: no_leak hole 1/5 OK (attempts=1)
+23:28:26 [INFO] checkm8_stage_spray: no_leak hole 2/5 OK (attempts=1)
+23:28:26 [INFO] checkm8_stage_spray: no_leak hole 3/5 OK (attempts=1)
+23:28:26 [INFO] checkm8_stage_spray: no_leak hole 4/5 OK (attempts=1)
+23:28:26 [INFO] checkm8_stage_spray: no_leak hole 5/5 OK (attempts=1)
+23:28:26 [INFO] checkm8_stage_spray: final leak/no_leak OK (attempts=1)
+23:28:26 [INFO] checkm8: stage 3 complete -- heap spray done
+23:28:26 [INFO] checkm8: waiting for USB re-enumeration...
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/026, errno=19
+23:28:26 [ERROR] failed to open DFU device: Input/Output Error
+libusb: error [get_usbfs_fd] File doesn't exist, wait 10 ms and try again
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/026, errno=2
+23:28:26 [ERROR] failed to open DFU device: No such device (it may have been disconnected)
+23:28:26 [INFO] DFU device found (bus 3, addr 27)
+23:28:26 [INFO] checkm8: USB handle re-acquired (bus reset OK)
+23:28:26 [INFO] checkm8: stage 4/4 -- overwrite with payload
+23:28:26 [INFO] assemble_payload: notA9 variant: data=2016 transfer=2016 pad=0 (rop_prefix=1552 main=120 cfg=96 handle=192+56) CPID 0x8010
+23:28:26 [INFO] assemble_payload: payload_dest=0x1800AFF08 payload_off=216 payload_sz=248
+23:28:26 [INFO] assemble_payload: memcpy=0x100010730 gUSBSN=0x180083CF8 patch=0x1020074AC bus_reset=0x180088B78
+23:28:26 [INFO] assemble_payload: exec_addr=0x1820B0610 write_ttbr0=0x1000003E4 tlbi=0x100000434
+23:28:26 [INFO] checkm8: [stage4] chip CPID=0x8010 has_tlbi=1
+23:28:26 [INFO] checkm8: [stage4] insecure_memory_base=0x1800B0000 nop_gadget=0x10000CC6C
+23:28:26 [INFO] checkm8: [stage4] A10/notA9 path: stall+leak before overwrite
+23:28:26 [INFO] checkm8: [stage4] pre-overwrite stall OK
+23:28:26 [INFO] checkm8: [stage4] pre-overwrite leak OK
+23:28:26 [INFO] build_overwrite_64: io_buffer=0x0 io_len=0x0 callback=0x10000CC6C (nop) next=0x1800B0000 (insecure_mem)
+23:28:26 [INFO] checkm8: [stage4] sending ARM64 overwrite (48 bytes)
+23:28:26 [INFO] checkm8: [stage4] send_overwrite: sending 48 bytes (bmReqType=0x02, bReq=0x03, wIndex=0x80)
+23:28:27 [INFO] checkm8: [stage4] send_overwrite: ret=-9 (Pipe error)
+23:28:27 [INFO] checkm8: [stage4] send_overwrite: STALL received (expected) -- overwrite landed in freed io_buffer
+23:28:27 [INFO] checkm8: [stage4] overwrite OK -- proceeding to payload send
+23:28:27 [INFO] checkm8: [stage4] v1.0.38: USBDEVFS_RESETEP EP0-OUT ret=-1 No such file or directory
+23:28:27 [INFO] checkm8: [stage4] v1.0.38: USBDEVFS_RESETEP EP0-IN  ret=-1 No such file or directory
+23:28:27 [WARN] checkm8: [stage4] v1.0.38: RESETEP failed -- falling back to handle reopen
+23:28:27 [INFO] checkm8: [stage4] v1.0.36 fallback: reopen handle on same addr...
+23:28:27 [INFO] checkm8: [stage4] v1.0.36 fallback: handle reopened
+23:28:27 [INFO] checkm8: [stage4] send_payload_chunks: sending 2016 bytes total (timeout=1000 ms)
+23:28:27 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 chunk=2016
+23:28:28 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 ret=-7 (Operation timed out)
+23:28:28 [WARN] checkm8: [stage4] send_payload_chunks: offset=0 got Operation timed out -- transfer completion unknown, payload may be executing (treating as OK)
+23:28:28 [INFO] checkm8: [stage4] send_payload_chunks: done -- completion unknown after Operation timed out at offset=0 (requested 2016 bytes total)
+23:28:28 [INFO] checkm8: [stage4] finalizing DFU transfer
+23:28:28 [WARN] send_dfu_finalize: suffix send failed: Operation timed out
+23:28:28 [WARN] send_dfu_finalize: zero-length send failed: Operation timed out
+23:28:28 [INFO] send_dfu_finalize: skipping status polls (finalize DNLOAD failed)
+23:28:28 [INFO] checkm8: stage 4 complete -- payload delivered
+23:28:28 [INFO] exploit_deliver: all stages complete
+23:28:28 [INFO] checkm8_exploit: stage 4 done -- waiting 250 ms before USB bus reset...
+23:28:29 [INFO] checkm8_exploit: triggering USB bus reset to clear EP0...
+23:28:29 [INFO] checkm8: waiting for USB re-enumeration...
+23:28:29 [INFO] DFU device found (bus 3, addr 27)
+23:28:29 [INFO] checkm8: USB handle re-acquired (bus reset OK)
+23:28:29 [INFO] CPID: 0x8010
+23:28:29 [INFO] ECID: 0x0018792134908026
+23:28:29 [INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:0018792134908026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
+23:28:29 [INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
+23:28:29 [WARN] checkm8_verify_pwned: PWND marker not found in serial
+23:28:29 [WARN] checkm8_exploit: not pwned after attempt 2
+23:28:29 [INFO] checkm8_exploit: waiting for device reset...
+23:28:31 [INFO] DFU device found (bus 3, addr 27)
+23:28:31 [INFO] checkm8_exploit: USB handle re-acquired for retry 3
+23:28:31 [INFO] CPID: 0x8010
+23:28:31 [INFO] ECID: 0x0018792134908026
+23:28:31 [INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:0018792134908026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
+23:28:31 [INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
+23:28:31 [WARN] checkm8_verify_pwned: PWND marker not found in serial
+23:28:31 [INFO] checkm8_exploit: not yet PWND, running attempt 3
+23:28:31 [INFO] checkm8_exploit: attempt 3/3
+23:28:31 [INFO] exploit_init: target A10 (iBoot-2696) (iPhone 7 / iPad (7th gen) / iPod touch 7G), CPID 0x8010
+23:28:31 [INFO] exploit_deliver: starting checkm8 on A10 (iBoot-2696)
+23:28:31 [INFO] checkm8: stage 1/4 -- reset DFU state
+23:28:31 [INFO] checkm8: stage 1 complete -- DFU reset stage OK
+23:28:31 [INFO] checkm8: waiting for USB re-enumeration...
+23:28:31 [INFO] DFU device found (bus 3, addr 27)
+23:28:31 [INFO] checkm8: USB handle re-acquired (bus reset OK)
+23:28:31 [INFO] checkm8: stage 2/4 -- setup (overwrite_pad=0x5C0, usb_timeout=5 ms)
+23:28:31 [INFO] checkm8: setup attempt 1/50: sent=2048 bytes (need <1472, abort=4 ms)
+23:28:31 [INFO] checkm8: [Linux xHCI] Cancelled! Guessing sent=0 (to prevent crash)
+23:28:31 [INFO] checkm8: stage 2 complete -- UAF triggered (sent=0, pad=1472)
+23:28:31 [INFO] checkm8: waiting for USB re-enumeration...
+23:28:31 [INFO] DFU device found (bus 3, addr 27)
+23:28:31 [INFO] checkm8: USB handle re-acquired (bus reset OK)
+23:28:31 [INFO] checkm8: stage 3/4 -- heap spray
+23:28:31 [INFO] checkm8_stage_spray: path B (holes=5)
+23:28:31 [INFO] checkm8_stall: success (attempts=3 ret=0 abort=0 ms)
+23:28:31 [INFO] checkm8_stage_spray: no_leak hole 1/5 OK (attempts=1)
+23:28:31 [INFO] checkm8_stage_spray: no_leak hole 2/5 OK (attempts=1)
+23:28:31 [INFO] checkm8_stage_spray: no_leak hole 3/5 OK (attempts=1)
+23:28:31 [INFO] checkm8_stage_spray: no_leak hole 4/5 OK (attempts=1)
+23:28:31 [INFO] checkm8_stage_spray: no_leak hole 5/5 OK (attempts=1)
+23:28:31 [INFO] checkm8_stage_spray: final leak/no_leak OK (attempts=1)
+23:28:31 [INFO] checkm8: stage 3 complete -- heap spray done
+23:28:31 [INFO] checkm8: waiting for USB re-enumeration...
+libusb: error [get_usbfs_fd] libusb couldn't open USB device /dev/bus/usb/003/027, errno=19
+23:28:31 [ERROR] failed to open DFU device: Input/Output Error
+23:28:32 [INFO] DFU device found (bus 3, addr 28)
+23:28:32 [INFO] checkm8: USB handle re-acquired (bus reset OK)
+23:28:32 [INFO] checkm8: stage 4/4 -- overwrite with payload
+23:28:32 [INFO] assemble_payload: notA9 variant: data=2016 transfer=2016 pad=0 (rop_prefix=1552 main=120 cfg=96 handle=192+56) CPID 0x8010
+23:28:32 [INFO] assemble_payload: payload_dest=0x1800AFF08 payload_off=216 payload_sz=248
+23:28:32 [INFO] assemble_payload: memcpy=0x100010730 gUSBSN=0x180083CF8 patch=0x1020074AC bus_reset=0x180088B78
+23:28:32 [INFO] assemble_payload: exec_addr=0x1820B0610 write_ttbr0=0x1000003E4 tlbi=0x100000434
+23:28:32 [INFO] checkm8: [stage4] chip CPID=0x8010 has_tlbi=1
+23:28:32 [INFO] checkm8: [stage4] insecure_memory_base=0x1800B0000 nop_gadget=0x10000CC6C
+23:28:32 [INFO] checkm8: [stage4] A10/notA9 path: stall+leak before overwrite
+23:28:32 [INFO] checkm8: [stage4] pre-overwrite stall OK
+23:28:32 [INFO] checkm8: [stage4] pre-overwrite leak OK
+23:28:32 [INFO] build_overwrite_64: io_buffer=0x0 io_len=0x0 callback=0x10000CC6C (nop) next=0x1800B0000 (insecure_mem)
+23:28:32 [INFO] checkm8: [stage4] sending ARM64 overwrite (48 bytes)
+23:28:32 [INFO] checkm8: [stage4] send_overwrite: sending 48 bytes (bmReqType=0x02, bReq=0x03, wIndex=0x80)
+23:28:32 [INFO] checkm8: [stage4] send_overwrite: ret=-9 (Pipe error)
+23:28:32 [INFO] checkm8: [stage4] send_overwrite: STALL received (expected) -- overwrite landed in freed io_buffer
+23:28:32 [INFO] checkm8: [stage4] overwrite OK -- proceeding to payload send
+23:28:32 [INFO] checkm8: [stage4] v1.0.38: USBDEVFS_RESETEP EP0-OUT ret=-1 No such file or directory
+23:28:32 [INFO] checkm8: [stage4] v1.0.38: USBDEVFS_RESETEP EP0-IN  ret=-1 No such file or directory
+23:28:32 [WARN] checkm8: [stage4] v1.0.38: RESETEP failed -- falling back to handle reopen
+23:28:32 [INFO] checkm8: [stage4] v1.0.36 fallback: reopen handle on same addr...
+23:28:32 [INFO] checkm8: [stage4] v1.0.36 fallback: handle reopened
+23:28:32 [INFO] checkm8: [stage4] send_payload_chunks: sending 2016 bytes total (timeout=1000 ms)
+23:28:32 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 chunk=2016
+23:28:33 [INFO] checkm8: [stage4] send_payload_chunks: offset=0 ret=-7 (Operation timed out)
+23:28:33 [WARN] checkm8: [stage4] send_payload_chunks: offset=0 got Operation timed out -- transfer completion unknown, payload may be executing (treating as OK)
+23:28:33 [INFO] checkm8: [stage4] send_payload_chunks: done -- completion unknown after Operation timed out at offset=0 (requested 2016 bytes total)
+23:28:33 [INFO] checkm8: [stage4] finalizing DFU transfer
+23:28:33 [WARN] send_dfu_finalize: suffix send failed: Operation timed out
+23:28:33 [WARN] send_dfu_finalize: zero-length send failed: Operation timed out
+23:28:33 [INFO] send_dfu_finalize: skipping status polls (finalize DNLOAD failed)
+23:28:33 [INFO] checkm8: stage 4 complete -- payload delivered
+23:28:33 [INFO] exploit_deliver: all stages complete
+23:28:33 [INFO] checkm8_exploit: stage 4 done -- waiting 250 ms before USB bus reset...
+23:28:33 [INFO] checkm8_exploit: triggering USB bus reset to clear EP0...
+23:28:33 [INFO] checkm8: waiting for USB re-enumeration...
+23:28:33 [INFO] DFU device found (bus 3, addr 28)
+23:28:33 [INFO] checkm8: USB handle re-acquired (bus reset OK)
+23:28:33 [INFO] CPID: 0x8010
+23:28:33 [INFO] ECID: 0x0018792134908026
+23:28:33 [INFO] checkm8_verify_pwned: serial = "CPID:8010 CPRV:11 CPFM:03 SCEP:01 BDID:1C ECID:0018792134908026 IBFL:3C SRTG:[iBoot-2696.0.0.1.33]" (len=98)
+23:28:33 [INFO] checkm8_verify_pwned: serial hex = [43 50 49 44 3A 38 30 31 30 20 43 50 52 56 3A 31 31 20 43 50 46 4D 3A 30 33 20 53 43 45 50 3A 30 31 20 42 44 49 44 3A 31 43 20 ]
+23:28:33 [WARN] checkm8_verify_pwned: PWND marker not found in serial
+23:28:33 [WARN] checkm8_exploit: not pwned after attempt 3
+23:28:33 [ERROR] checkm8_exploit: failed after 3 attempts
+23:28:33 [ERROR] path_a: checkm8 exploit failed
 
 [-] Bypass failed (error -1).
