@@ -1649,7 +1649,80 @@ El gadget lee estos valores de un **offset fijo relativo a algún registro** —
 
 Pero si el BootROM pasa el struct pointer en un registro diferente, o en un offset distinto, el gadget leería basura.
 
-**→ Investigando con research agent lanzado en paralelo.**
+Pero si el BootROM pasa el struct pointer en un registro diferente, o en un offset distinto, el gadget leería basura.
+
+---
+
+## Research Agent: func_gadget confirmado correcto (2026-06-01 ~11:26)
+
+El research agent encontró la respuesta definitiva:
+
+### func_gadget = `LDP X8, X10, [X0, #0x70]` / `MOV X0, X8` / `BLR X10`
+
+- **Registro:** `x0` contiene el puntero al struct cuando el BootROM llama el callback
+- **Offset:** `+0x70` para `arg`, `+0x78` para `func`
+- **Math verificado:** para slot 0 con base `0x1800B0000` → `[0x1800B0000+0x70] = buf[0x70]` = `insecure_memory_base` (write_ttbr0 arg) ✅
+- **Flujo completo confirmado:** cb0→write_ttbr0, cb1→tlbi, cb2→exec_addr(shellcode), cb3→write_ttbr0(restore), cb4→tlbi, cb5→ret_gadget
+
+**El ROP chain es correcto en todos sus componentes.** Esto descarta las hipótesis 1, 2, 3 y 4.
+
+---
+
+## v1.0.43 — El bug encontrado: verificación destruía la evidencia (2026-06-01 ~11:32)
+
+### Root cause REAL identificado: el bus reset de verificación borraba el PWND
+
+**El exploit PROBABLEMENTE ya estaba funcionando** desde hace varias versiones. El serial PWND estaba siendo escrito por el shellcode, pero nosotros mandábamos un bus reset ANTES de leerlo, destruyendo la evidencia:
+
+**Flujo anterior (buggy):**
+```
+payload delivery → 250ms wait → BUS RESET → re-enumerate → read serial
+```
+
+**Qué pasaba:**
+- Shellcode corre → escribe PWND en `gUSBSerialNumber+1` → llama `usb_create_string_descriptor`
+- Shellcode nullifica `dfu_handle_bus_reset`
+- Nosotros mandamos bus reset → BootROM intenta llamar `dfu_handle_bus_reset` (= NULL)
+- OPCIÓN A: crash → hardware reset → DFU clean re-enumerate → serial limpio siempre ❌
+- OPCIÓN B: null check skips, USB se reinicializa → recrear serial descriptor desde `gUSBSerialNumber` (que sí tiene PWND) → pero el timing es raro
+
+**gaster** verifica el serial con GET_DESCRIPTOR DIRECTO, SIN bus reset. El PWND serial vive en el descriptor table del BootROM en ese momento.
+
+### Fix en v1.0.43:
+
+```
+payload delivery → 250ms wait → GET_DESCRIPTOR directo → if PWND: SUCCESS!
+                                                        → if not: BUS RESET → verify
+```
+
+El log nuevo va a mostrar:
+```
+checkm8_exploit: [v1.0.43] trying direct serial read (no bus reset)...
+checkm8_verify_pwned: serial = " PWND:[checkm8]..."
+checkm8_exploit: SUCCESS via direct read attempt 1 (shellcode confirmed)
+```
+
+O si el read directo falla (EP0 confused):
+```
+checkm8_exploit: direct read failed (EP0 confused) -- trying bus-reset verify
+```
+
+**Este es el cambio más importante desde que empezamos a debuggear.**
+
+### Qué buscar en los logs de v1.0.43:
+
+1. **`direct read: PWND not found`** → exploit no funciona todavía (problema real en ROP)
+2. **`direct read failed (EP0 confused)`** → EP0 está en mal estado post-STATUS-timeout; probar aumentar el delay antes del read
+3. **`SUCCESS via direct read`** → ¡EXPLOTADO! 🎉
+
+### Si sigue fallando con v1.0.43:
+
+Agregar un delay adicional entre el payload timeout y el direct read:
+```bash
+CHECKM8_POST_PAYLOAD_DELAY_MS=500 sudo ./tr4mpass
+```
+O probar aumentar `POST_STAGE4_SETTLE_USEC` de 250ms a 500ms.
+
 
 
 
