@@ -1723,6 +1723,102 @@ CHECKM8_POST_PAYLOAD_DELAY_MS=500 sudo ./tr4mpass
 ```
 O probar aumentar `POST_STAGE4_SETTLE_USEC` de 250ms a 500ms.
 
+---
+
+## v1.0.43 — Resultados (2026-06-01 ~11:37-11:41) — Device confirma ejecución post-payload
+
+### Datos clave nuevos:
+
+#### 1. Direct read retorna datos corruptos consistentes (NO el serial DFU normal)
+
+```
+BLACK: serial = "C@Y)e"   hex = [43 40 17 59 29 65]  (en los 3 intentos)
+WHITE: serial = "C0??V"   hex = [43 30 86 04 BF 56]  (en los 3 intentos)
+```
+
+Esto NO es el serial normal `"CPID:8010 CPRV:11..."` ni es PWND. Son 6 bytes que libirecovery
+lee del device luego de que todos los GET_DESCRIPTOR timeoutean. El EP0 no responde a ningún
+string descriptor después del payload — prueba de que el USB stack del BootROM está en estado
+modificado/corrupto post-ROP.
+
+**Esta es la primera evidencia directa de que el ROP EJECUTA código.** El device no está en estado
+DFU normal — el USB stack está roto de alguna manera.
+
+#### 2. EP0 completamente no-responsivo después del payload
+
+Todos los string descriptors (índices 1-8) timeoutean 2s cada uno → ~30s de espera total.
+Solo la fallback de libirecovery devuelve algo (esos 6 bytes).
+
+Esto es consistente con:
+- El shellcode corrió pero write_ttbr0 dejó el USB stack en estado inconsistente, O
+- El ROP crasheó a mitad (write_ttbr0 ok → tlbi ok → exec_addr fault), dejando
+  EP0 bloqueado sin completar el STATUS del DNLOAD.
+
+#### 3. Bus reset limpia el estado y devuelve serial normal
+
+Después del bus reset, el device re-enumera normalmente con el serial DFU completo.
+Esto confirma que el bus reset hace hardware USB reset en el BootROM — NO hay crash/restart del CPU.
+
+---
+
+### Nueva hipótesis principal: exec_addr bajo TTBR0 nuevo causa un permission fault
+
+El ROP chain:
+1. `write_ttbr0(0x1800B0000)` → TTBR0 apunta a nuestra page table ✅ (probablemente OK)
+2. `tlbi(0)` → TLB invalido ✅ (OK)
+3. `exec_addr(0)` → CPU hace BLR a `0x1820B0610`
+
+Para que el BLR a `0x1820B0610` funcione, esa VA debe ser ejecutable bajo la nueva TTBR0.
+La entry `0xC1` en la page table (en `buf[0x608]` = PA `0x1800B0608`) es `0x1800006A5`:
+- AP=10 → EL1 read, EL0 no access
+- PXN=0, UXN=0 → ejecutable en EL1
+
+**Pero ¿`0x1820B0610` cae en la entry 0xC1?**
+
+Con 16KB pages y L2 table (1 level de walk, T0SZ apropiado):
+- Cada L2 entry cubre 32MB (`ARM_16K_TT_L2_SZ = 0x2000000`)
+- Entry index = VA >> 25 (bits [35:25])
+- Para `0x1820B0610`: index = `0x1820B0610 >> 25 = 0xC1` → entry 0xC1 ✅
+
+Esto es correcto. La page table math parece OK según los cálculos preliminares.
+
+**Research agent activo verificando esto en detalle.**
+
+---
+
+### Discrepancia encontrada: ¿qué recibe write_ttbr0?
+
+En gaster_ref.c línea 1026-1029:
+```c
+callbacks[0] = { write_ttbr0, insecure_memory_base };  // TTBR0 := 0x1800B0000
+callbacks[3] = { write_ttbr0, ttbr0_addr };             // TTBR0 := 0x1800A0000 (restore)
+```
+
+En nuestro código (checkm8_payload.c línea 272-278):
+```c
+callbacks[0].arg = chip->insecure_memory_base;   // 0x1800B0000 ✅ igual que gaster
+callbacks[3].arg = chip->ttbr0_addr;             // 0x1800A0000 ✅ igual que gaster
+```
+
+Aparentemente correcto. El `write_ttbr0` recibe `insecure_memory_base` como TTBR0.
+
+---
+
+### Estado del diagnóstico v1.0.43
+
+| Componente | Estado |
+|-----------|--------|
+| UAF trigger (stage 2) | ✅ siempre funciona |
+| Heap spray (stage 3) | ✅ funciona |
+| Overwrite STALL | ✅ siempre STALL correcto |
+| Payload entregado | ✅ `actual=2016 completed=1` |
+| ROP layout | ✅ confirmado correcto via hex dump |
+| ROP ejecutando ALGO | ✅ EP0 queda roto post-payload (evidencia directa) |
+| Shellcode ejecuta correctamente | ❌ no hay PWND, EP0 no responde |
+| Direct read retorna serial correcto | ❌ retorna 6 bytes de basura |
+| Investigando: page table math | 🔄 research agent activo |
+
+
 
 
 
