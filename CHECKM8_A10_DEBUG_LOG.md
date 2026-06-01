@@ -988,13 +988,13 @@ Regla para los próximos pasos: probar una hipótesis por vez, con una versión/
 | H5 | El problema es host USB/cable/controlador, no tr4mpass | gaster/King reportan sensibilidad a Linux/xHCI, hubs y cables | Correr upstream `gaster pwn` mismo host/puerto/dispositivo | Si gaster falla también: stack host; si gaster pwn: bug nuestro |
 | H6 | El payload DATA stage puede llegar aunque libusb devuelva timeout | `v1.0.39`: `actual=2016` en 5/6 intentos; `actual=128` en 1/6 | Mantener diagnóstico `actual_length`; si hace falta, confirmar con `usbmon` | DATA completo pero STATUS timeout desplaza el problema a ejecución/finalize |
 | H7 | Drift de versión/docs está ensuciando conclusiones | `v1.0.38` corrió impreso como `1.0.36`; `COMP_CHANGES.md` estaba viejo | Bump de `CHECKM8_EXPLOIT_VERSION` y actualizar docs antes de hardware | **Hecho en v1.0.39** |
-| H8 | El finalize DFU o el timing post-payload perturba ejecución/observación | `actual=2016` pero suffix/zlen fallan y serial vuelve limpio | `v1.0.40`: `CHECKM8_FINALIZE_MODE=skip`; luego delay post-payload | Si PWND aparece, finalize/timing era parte del bloqueo |
+| H8 | El finalize DFU o el timing post-payload perturba ejecución/observación | `actual=2016` pero suffix/zlen fallan y serial vuelve limpio; `v1.0.40` corrido con `finalize mode 'gaster'` todavía no prueba esto | `v1.0.40`: `CHECKM8_FINALIZE_MODE=skip`; luego delay post-payload | Si PWND aparece, finalize/timing era parte del bloqueo |
 
 ## Test Plan (one by one)
 
 1. **H7 / higiene primero:** bump real de versión antes de otra corrida y asegurar que el log diga el experimento correcto. **Hecho en código v1.0.39.**
 2. **H6 / payload actual_length:** correr `v1.0.39` con `CHECKM8_EP0_RECOVERY=none` y mirar `status=... actual=...` del payload DNLOAD. **Hecho: 5/6 con `actual=2016`, 1/6 parcial `128`.**
-3. **H8 / finalize/timing:** correr `v1.0.40` con `CHECKM8_FINALIZE_MODE=skip`, sin otro cambio.
+3. **H8 / finalize/timing:** correr `v1.0.40` con `CHECKM8_FINALIZE_MODE=skip`, sin otro cambio. **Pendiente; los logs actuales siguen con `finalize mode 'gaster'`.**
 4. **H8 / delay:** si sigue limpio, repetir con `CHECKM8_POST_PAYLOAD_DELAY_MS=500`.
 5. **H5 / control gaster:** correr upstream `0x7ff/gaster` en el mismo host/cable/puerto.
 6. **H4 / control King:** correr upstream `pgarba/King` en el mismo host/cable/puerto.
@@ -1094,3 +1094,200 @@ sudo ./tr4mpass ...
 ```
 
 Eso separa "no finalizar" de "darle más tiempo a ROP/shellcode antes del bus reset".
+
+**Resultado con logs actuales (`src/log_white.txt`, `src/log_black.txt`):**
+
+Todavía no prueba H8. Los dos logs muestran:
+
+- `checkm8_exploit: version 1.0.40`
+- `v1.0.40: EP0 recovery mode 'none'`
+- `v1.0.40: finalize mode 'gaster'`
+
+O sea: se corrió la versión nueva, pero no el experimento de `CHECKM8_FINALIZE_MODE=skip`.
+
+**Qué sí aportan estos logs:**
+
+- `black`: 3/3 intentos llegaron a stage 4 con `actual=2016`.
+- `white`: intento 1 llegó con `actual=2016`; intento 2 quedó parcial con `actual=192`; intento 3 ni siquiera llegó a stage 4 porque falló en stage 1 reset con:
+
+```text
+dfu_dnload: block 0 failed: Pipe error
+checkm8_stage_reset: DFU_DNLOAD(suffix) failed
+```
+
+- En todos los intentos que sí llegaron a stage 4, el patrón siguió igual:
+  - overwrite STALL esperado
+  - payload `ret=-7` con `status=TIMED_OUT`
+  - `actual` mayormente completo (`2016`) y una vez parcial (`192`)
+  - finalize suffix/zlen timeout
+  - bus reset 250 ms
+  - serial DFU limpio, sin `PWND`
+
+**Lectura actualizada:**
+
+- H6 sigue teniendo sentido: el DATA stage llega muchas veces, así que el problema no parece ser simplemente "el host no manda payload".
+- H8 sigue teniendo sentido como hipótesis de trabajo, pero estos logs no la confirman ni la debilitan porque el path ejecutado fue el mismo `gaster finalize` de antes.
+- El `actual=192` en `white` muestra que hay algo de variabilidad host/device en el corte del transfer, pero no alcanza para explicar por sí solo la ausencia de `PWND`, porque también fallan varios intentos con `actual=2016`.
+- El fallo de stage 1 en `white` intento 3 parece ruido adicional del estado USB tras retries; no cambia la lectura principal sobre stage 4.
+
+**Conclusión operativa:** la hipótesis H8 es razonable, pero el run actual fue un re-baseline de `v1.0.40`, no el experimento aislado. El próximo dato útil sigue siendo correr exactamente `CHECKM8_FINALIZE_MODE=skip` y, si hace falta, luego `CHECKM8_POST_PAYLOAD_DELAY_MS=500`.
+
+---
+
+## Re-análisis Profundo (2026-06-01) — Después de v1.0.36
+
+### Logs analizados: log_black.txt y log_white.txt (v1.0.36, ~13:21–13:22)
+
+#### Patrón observado (idéntico en black y white, 3/3 intentos):
+
+```
+v1.0.36: reopen handle on same addr to clear host-side EP0 HALT...
+v1.0.36: handle reopened (same device, no bus reset) -- overwrite preserved
+send_payload_chunks: offset=0 ret=-7 (Operation timed out)
+```
+
+**El reopen del handle libusb (sin bus reset) NO limpia el EP0 HALT del kernel.**
+La conclusión es definitiva: el estado HALT se mantiene en el `usbcore`/xHCI del kernel, no en el handle de libusb. Cerrar y reabrir el fd no resetea el driver.
+
+---
+
+### Mapa definitivo de versiones vs comportamiento EP0
+
+| Versión | Estrategia post-overwrite | Resultado DNLOAD | Serial |
+|---------|--------------------------|-----------------|--------|
+| v1.0.33 y anteriores | Sin EP0 recovery | ret=-7 timeout | limpio |
+| v1.0.34 | bus reset completo | **ret=2016 ✅** (DFU 0x06→0x07→0x08) | limpio |
+| v1.0.35 | CLEAR_HALT EP0 | ret=-5 NOT_FOUND + ret=-7 | limpio |
+| v1.0.36 | reopen handle mismo device | ret=-7 timeout | limpio |
+
+**Conclusión única del mapa:** El único mecanismo que entregó el payload es el bus reset (v1.0.34). Pero tras recibir 2016 bytes con DFU completado, el serial sigue limpio.
+
+---
+
+### ¿Por qué v1.0.34 (bus reset) NO pwneó el device?
+
+**Dos hipótesis en competencia:**
+
+#### H-A: El bus reset destruye el overwrite antes que el ROP ejecute
+- El BootROM recibe el bus reset → llama `dfu_handle_bus_reset()` → limpia/reinicia DFU state machine
+- La overwrite en el freed io_buffer sobrevive en RAM pero el BootROM ya no la invoca como callback (reinicia la pipeline DFU)
+- El payload de 2016 bytes llega → el BootROM lo procesa como firmware normal → DFU states (MANIFEST_SYNC→MANIFEST→MANIFEST_WAIT_RESET) son el ciclo DFU normal
+- El ROP nunca ejecuta → serial limpio
+
+#### H-B: El overwrite sobrevive al bus reset, el ROP ejecuta, pero algo falla en el shellcode
+- `dfu_handle_bus_reset()` NO limpia el freed io_buffer (depende de la implementación del BootROM)
+- El BootROM reinicia DFU y eventualmente procesa el overwrite callback → ROP ejecuta
+- El payload llega (2016 bytes), el DFU completa normalmente (la DFU finalization vía nop_gadget devuelve al loop normalmente)
+- El ROP ejecuta pero alguno de los gadgets falla: `write_ttbr0`, `tlbi`, `exec_addr`, o el shellcode ARM64
+
+**Diferenciador clave para distinguir H-A vs H-B:**
+- Si H-A: la USB addr post-stage4 es la MISMA que durante stage4 (sin reset del device). ✅ Observado en logs
+- Si H-B: la USB addr post-stage4 podría cambiar si el shellcode dispara un bus reset interno (pero el shellcode de gaster nulifica `dfu_handle_bus_reset` antes de hacer el bus reset del serial...)
+
+**El MD anterior dice:** "En el log black, el addr post-stage4 es el mismo que el addr con el que entramos al stage4". Esto es consistente con H-A, pero no la confirma porque en H-B la addr también podría ser la misma si el shellcode no dispara un reset USB propio.
+
+---
+
+### Análisis del código: ¿qué haría el ROP si ejecutara?
+
+El ROP chain para A10 es:
+```
+callback[0]: write_ttbr0(insecure_memory_base)  → cambia TTBR0 al page table en SRAM
+callback[1]: tlbi(0)                             → TLB invalidate
+callback[2]: exec_addr(0)                        → salta al shellcode en SRAM
+callback[3]: write_ttbr0(ttbr0_addr)            → restaura TTBR0 original
+callback[4]: tlbi(0)                             → TLB invalidate
+callback[5]: ret_gadget(0)                       → return
+```
+
+El shellcode ARM64 (120 bytes) en `exec_addr=0x1820B0610`:
+1. Nulifica `dfu_handle_bus_reset` (SRAM ptr)
+2. Parchea `dfu_handle_request` para instalar el nuevo handler en `payload_dest`
+3. `memcpy` del handle code al `payload_dest`
+4. Espera que `gUSBSerialNumber` no sea nulo
+5. Copia string " PWND:[checkm8]" via `ldp/stp`
+6. Llama `usb_create_string_descriptor`
+7. Escribe resultado en `usb_serial_number_string_descriptor`
+8. Escribe `0xD2800000` en `patch_addr` (= `0x1020074AC`)
+9. `ret`
+
+**Punto crítico del ROP:**
+`exec_addr = insecure_memory_base + ARM_16K_TT_L2_SZ + rop_prefix_sz`
+= `0x1800B0000 + 0x2000000 + (ttbr0_sram_off + 2*8)`
+= `0x1800B0000 + 0x2000000 + 0x600 + 16`
+= `0x1820B0610`
+
+El shellcode está en `0x1820B0610` **bajo el nuevo TTBR0 que apunta a `insecure_memory_base`**. Esto es la virtual address bajo el nuevo mapping. La dirección **física** del shellcode es `insecure_memory_base + rop_prefix_sz = 0x1800B0610` (dentro del payload que enviamos).
+
+Esto parece correcto. El problema podría ser que el shellcode en la SRAM no existe correctamente porque **el bus reset vacía la SRAM de DFU** antes de que el ROP ejecute.
+
+---
+
+### Hipótesis de trabajo más probable (H-A refinada)
+
+El bus reset en v1.0.34 entrega el payload pero activa `dfu_handle_bus_reset()` en el BootROM. Esta función:
+1. Puede re-inicializar el io_buffer pool (liberando la region donde está la overwrite)
+2. O simplemente cambia el DFU state machine a estado IDLE
+
+Si el BootROM resetea la DFU state machine a IDLE tras el bus reset, el overwrite callback que estaba apuntando al nop_gadget no será invocado — porque la state machine fue reiniciada antes de que se procese el overwrite. Los 2016 bytes del payload llegan al DFU IDLE state como nuevo firmware → DFU completa normalmente (MANIFEST_SYNC→MANIFEST→MANIFEST_WAIT_RESET).
+
+---
+
+### El path correcto: `CHECKM8_EP0_RECOVERY=bus-reset` + `CHECKM8_FINALIZE_MODE=skip`
+
+El código actual (v1.0.40) ya tiene todo para probar esto:
+
+```bash
+# En Linux con el device en DFU:
+export CHECKM8_EP0_RECOVERY=bus-reset   # igual que v1.0.34 que entregó el payload
+export CHECKM8_FINALIZE_MODE=skip       # NO enviar suffix/zlen/status tras el payload
+export CHECKM8_POST_PAYLOAD_DELAY_MS=500  # 500ms para que el ROP ejecute
+sudo ./tr4mpass
+```
+
+**Por qué esto puede funcionar:**
+- El bus reset es necesario para limpiar EP0 (solo opción conocida que funciona)
+- Si el ROP **sí** ejecuta en v1.0.34, el shellcode puede tardar en correr
+- El `send_dfu_finalize` actual (suffix + zlen + 3×status) manda 3 transfers más que podrían interferir con el ROP en ejecución
+- Con `FINALIZE_MODE=skip` + delay, damos tiempo al ROP antes del bus reset de verificación
+- Si PWND aparece → el problema era el finalize interfiriendo con el ROP
+- Si sigue sin PWND → el problema es en el ROP chain o el bus reset destruye el overwrite (H-A)
+
+---
+
+### Si H8 falla también: Siguiente paso es KING PATH
+
+El código ya tiene `CHECKM8_KING_PATH` compilable que usa `(0x00, 0x00, 0, 0)` en vez de `(0x02, 0x03, 0, 0x80)` para el overwrite. El KING PATH no produce STALL, por lo que EP0 queda disponible inmediatamente para el payload DNLOAD sin necesidad de bus reset.
+
+```bash
+# Compilar con King path:
+make clean && make CFLAGS="-DCHECKM8_KING_PATH"
+# luego testear
+sudo ./tr4mpass
+```
+
+El riesgo del King path es que el BootROM puede rechazar el request `(0x00, 0x00, 0, 0)` en lugar de escribirlo al freed io_buffer, o puede escribirlo pero en un offset diferente al esperado.
+
+---
+
+## Próximos experimentos pendientes de hardware
+
+### Experimento 1 (prioridad alta): bus-reset + skip finalize + delay
+```bash
+export CHECKM8_EP0_RECOVERY=bus-reset
+export CHECKM8_FINALIZE_MODE=skip
+export CHECKM8_POST_PAYLOAD_DELAY_MS=500
+sudo ./tr4mpass
+```
+**Señales esperadas:**
+- Si PWND → el finalize era el problema (el ROP sí ejecutaba en v1.0.34)
+- Si actual=2016 + serial limpio → H-A es correcta (bus reset destruye overwrite)
+
+### Experimento 2 (si exp1 falla): KING PATH
+```bash
+make clean && make EXTRA_CFLAGS="-DCHECKM8_KING_PATH"
+sudo ./tr4mpass
+```
+**Señales esperadas:**
+- Si no hay STALL y el payload DNLOAD funciona → excelente (sin bus reset needed)
+- Si hay STALL inesperado → el BootROM rechaza el request `(0,0,0,0)` en este estado
