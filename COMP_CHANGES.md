@@ -26,11 +26,11 @@ Rama de trabajo para iterar el exploit checkm8 en **iPhone 7-class / iBoot-2696*
 | **1.0.37** | "King path" parcial: overwrite 48 B vía `(0,0,0,0)` | También STALL; no entrega payload |
 | **1.0.38** | `USBDEVFS_RESETEP` directo sobre EP0 | Probado: EP0 OUT/IN devuelven `ENOENT`; fallback reopen; payload timeout |
 | **1.0.39** | Payload DNLOAD diagnóstico (`status`/`actual_length`) + `CHECKM8_EP0_RECOVERY` explícito | Probado: en 5/6 intentos el DATA stage reportó `actual=2016`; no hubo `PWND` |
-| **1.0.40** | `CHECKM8_FINALIZE_MODE=skip` y `CHECKM8_POST_PAYLOAD_DELAY_MS`; log `cancel_requested` | Próxima prueba: aislar finalize/timing después de payload completo |
+| **1.0.40** | `CHECKM8_FINALIZE_MODE=skip` y `CHECKM8_POST_PAYLOAD_DELAY_MS`; log `cancel_requested` | Corrido en baseline con `finalize mode 'gaster'`: no prueba H8 todavía; confirma otra vez payload mayormente completo y serial limpio |
 
-**Estado conocido actual:** stages 1–3 OK; stage 4 concentra el problema. Sin recovery EP0, el payload `DFU_DNLOAD` sigue timeouteando a nivel libusb, pero `v1.0.39` mostró `actual=2016` en 5/6 intentos, o sea que el DATA stage generalmente sí se transfiere. `USBDEVFS_RESETEP(EP0)` falla con `ENOENT`. Con bus reset pre-payload, payload/finalize llegan pero el serial vuelve limpio. El "King path" parcial también STALLa y deja el dispositivo wedged.
+**Estado conocido actual:** stages 1–3 suelen estar OK y stage 4 concentra el problema. Sin recovery EP0, el payload `DFU_DNLOAD` sigue timeouteando a nivel libusb, pero `v1.0.39` y `v1.0.40` muestran que el DATA stage generalmente sí se transfiere (`actual=2016` en la mayoría de los intentos). `USBDEVFS_RESETEP(EP0)` falla con `ENOENT`. Con bus reset pre-payload, payload/finalize llegan pero el serial vuelve limpio. El "King path" parcial también STALLa y deja el dispositivo wedged.
 
-**Últimas corridas en logs:** `src/log_white.txt` y `src/log_black.txt` muestran `v1.0.39`: gaster baseline (`CHECKM8_EP0_RECOVERY=none`), payload timeout con `actual=2016` en `white` 3/3 y `black` 2/3, primer intento `black` parcial `actual=128`. Finalize falla y el serial vuelve limpio. Sin `PWND`.
+**Últimas corridas en logs:** `src/log_white.txt` y `src/log_black.txt` muestran `v1.0.40`, pero todavía en baseline gaster (`CHECKM8_EP0_RECOVERY=none`, `CHECKM8_FINALIZE_MODE='gaster'`). `black` llegó a stage 4 con `actual=2016` en 3/3; `white` dio `actual=2016` en 1/2 intentos de stage 4, `actual=192` en 1/2, y el intento 3 falló antes en stage 1 reset. Finalize siguió fallando y el serial volvió limpio. Sin `PWND`.
 
 ---
 
@@ -91,7 +91,7 @@ Referencia con PWND documentado en Linux ([pgarba/King](https://github.com/pgarb
 | Reopen handle | **Probado**; no limpia el problema |
 | King parcial | **Probado**; también STALL |
 | `USBDEVFS_RESETEP` EP0 | **Probado**; `ENOENT`, no limpia el problema |
-| Payload `actual_length` | **Probado con v1.0.39**: 5/6 intentos `actual=2016`; 1/6 parcial `actual=128` |
+| Payload `actual_length` | **Probado con v1.0.39/v1.0.40**: mayormente `actual=2016`; también se vieron parciales `128` y `192` |
 | King completo | **Pendiente** |
 
 ---
@@ -155,7 +155,7 @@ CHECKM8_EP0_RECOVERY=bus-reset sudo ./tr4mpass …
    - `checkm8_exploit: version 1.0.40` (o la versión actual)
    - `payload_timeout=1000 ms` en Linux 8010
    - `send_payload_chunks: ... actual=2016` vs parcial/0
-   - `v1.0.40: finalize mode 'skip'` en la próxima prueba
+   - `v1.0.40: finalize mode 'skip'` para que el experimento H8 quede realmente ejercitado
    - `checkm8_verify_pwned` → `PWND` o serial limpio/corrupto
 4. Anotar resultado en [`CHECKM8_A10_DEBUG_LOG.md`](CHECKM8_A10_DEBUG_LOG.md).
 
@@ -163,8 +163,8 @@ CHECKM8_EP0_RECOVERY=bus-reset sudo ./tr4mpass …
 
 ## Próximos experimentos (orden sugerido)
 
-1. **v1.0.40 finalize skip:** `CHECKM8_FINALIZE_MODE=skip`, sin delay extra. Mantener `CHECKM8_EP0_RECOVERY=none`.
-2. **v1.0.40 delay:** si sigue `actual=2016` + serial limpio, repetir con `CHECKM8_POST_PAYLOAD_DELAY_MS=500`.
+1. **v1.0.40 finalize skip:** `CHECKM8_FINALIZE_MODE=skip`, sin delay extra. Mantener `CHECKM8_EP0_RECOVERY=none`. Esto sigue pendiente: los logs actuales corrieron con `finalize mode 'gaster'`.
+2. **v1.0.40 delay:** si con `skip` sigue `actual=2016` + serial limpio, repetir con `CHECKM8_POST_PAYLOAD_DELAY_MS=500`.
 3. **Control gaster:** binario [gaster](https://github.com/0x7ff/gaster) en el **mismo** host USB → ¿PWND? Si gaster sí y tr4mpass no → bug nuestro; si ambos no → stack USB/host.
 4. **Control King:** binario [King](https://github.com/pgarba/King) en el mismo host/cable/puerto. King es el control fuerte para `8010 + Linux + PWND`.
 5. **usbmon:** si `actual=2016` continúa sin ejecución, capturar desde overwrite→payload→reset para ver STATUS/finalize/reset timing.
