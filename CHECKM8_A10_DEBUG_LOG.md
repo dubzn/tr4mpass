@@ -2141,10 +2141,86 @@ Con `payload_timeout = 10000ms` (v1.0.47):
 - El suffix → OK
 - El ZLP → STATUS PHASE → **callback activa** → ROP chain → shellcode → PWND
 
+
 ### Nota sobre nop_gadget:
 `nop_gadget = 0x10000CC6C` NO es un NOP vacío. Reescribe el Link Register (LR)
 al stack frame anterior para evitar que el BootROM llame `free()` en el buffer
 corrompido después del exploit. Es un gadget crítico para evitar heap panic.
+
+---
+
+## v1.0.47 — RESULTADO: TIMED_OUT exactamente en 10s (2026-06-09 ~16:45-16:50)
+
+### Dato crítico:
+```
+WHITE attempt 1: DNLOAD(1592 bytes) → TIMED_OUT exactamente en 10s
+WHITE attempt 2: DNLOAD(1592 bytes) → TIMED_OUT exactamente en 10s  
+WHITE attempt 3: DNLOAD(1592 bytes) → TIMED_OUT exactamente en 10s
+BLACK: stage2 falló en intento 1 (50/50 pad retries sin STALL)
+```
+
+El payload DNLOAD SIEMPRE agota el timeout COMPLETO (10000ms).
+**El BootROM no responde el STATUS IN nunca, sin importar cuánto esperemos.**
+Esto descarta la hipótesis de timing — no es que el BootROM sea lento.
+**El BootROM genuinamente no puede responder el STATUS IN.**
+
+### Causa raíz REAL identificada:
+
+**EP0 queda en estado HALTED en Linux después del overwrite STALL.**
+
+El overwrite usa `bmReqType=0x02, bReq=0x03, wIndex=0x80` → el BootROM responde con STALL.
+En Linux/xHCI, un STALL en EP0 deja el endpoint en estado `HALTED` en el host.
+El host xHCI NO completará ningún STATUS IN de EP0 hasta que se envíe
+`CLEAR_FEATURE(ENDPOINT_HALT)` al dispositivo.
+
+Sin CLEAR_HALT:
+- El DATA OUT del payload llega al BootROM (los 1592 bytes se transfieren)
+- El STATUS IN del DNLOAD nunca completa (el host no puede responderlo)
+- EP0 cuelga indefinidamente → TIMED_OUT siempre
+
+En macOS: IOUSBLib limpia el HALT de EP0 automáticamente después de STALL.
+**Por eso gaster funciona en macOS sin clear_halt.**
+En Linux: debe ser EXPLÍCITO con `libusb_clear_halt(usb, 0)`.
+
+---
+
+## v1.0.48 — FIX CRÍTICO: libusb_clear_halt(EP0) (2026-06-09)
+
+### Cambio:
+```c
+// checkm8_patch.c — después de send_overwrite() en el CPID_HAS_TLBI path:
+int ch_ret = libusb_clear_halt(usb, 0);  // ← NUEVA LÍNEA CRÍTICA
+log_info("checkm8: [stage4] clear_halt(EP0): ret=%d (%s)", ch_ret, ...);
+```
+
+### Flujo corregido:
+```
+1. send_overwrite(48 bytes, bmReqType=0x02) → BootROM STALL → EP0 HALTED
+2. libusb_clear_halt(usb, 0)               → CLEAR_FEATURE → EP0 Ready ✅
+3. DNLOAD(payload, 1592 bytes, timeout=50ms) → BootROM ACKs STATUS  ← NUEVO
+4. DNLOAD(suffix, 16 bytes)               → BootROM ACKs STATUS  ← NUEVO
+5. DNLOAD(0 bytes = ZLP)                  → STATUS PHASE → callback! ← NUEVO
+6. GET_STATUS(MANIFEST_SYNC)              → ROP chain ejecutó → PWND!
+```
+
+### Revertido:
+`CHECKM8_A10_LINUX_PAYLOAD_TIMEOUT_MS` volvió a `USB_ABORT_TIMEOUT_DEFAULT` (50ms).
+Con clear_halt el STATUS del payload debería completar en <50ms normalmente.
+
+### Estado:
+- ✅ Implementado y pusheado (commit 8559a4a)
+- Pendiente de prueba en dispositivo
+
+### Esperado en logs:
+```
+checkm8: [stage4] clear_halt(EP0): ret=0 (Success)  ← EP0 libre
+send_payload_chunks: offset=0 ret=1592 (Success)    ← STATUS completó!
+send_dfu_finalize: suffix send ret=16               ← PRIMERA VEZ
+send_dfu_finalize: zero-length send ret=0           ← ZLP!
+checkm8_verify_pwned: serial hex = [41 41 41 41 ...] ← CANARY / PWND!
+```
+
+
 
 
 
